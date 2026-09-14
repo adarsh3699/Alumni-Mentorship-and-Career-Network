@@ -117,7 +117,7 @@ applicable.
 The requirements in this document are derived from:
 
 1.  the approved P11 PRD v1.0;
-2.  the P11 project specification in the EduRev Project List;
+2.  the authoritative P11 source extract in `docs/P11_Project_Source.md`;
 3.  the applicable Common Engineering Standard.
 
 The P11 specification defines the core capabilities, actors,
@@ -726,9 +726,6 @@ service according to the integration's supported behaviour.
 
 ### FR-M6-05 --- Scheduling Failure
 
-This is a derived system reliability requirement based on the product
-need for dependable scheduling integration.
-
 If required calendar synchronization fails, the system shall not
 represent the session as successfully synchronized.
 
@@ -1219,7 +1216,8 @@ Data transmission shall use TLS 1.2 or higher.
 ### SEC-14
 
 The system shall protect stored sensitive personal information in
-accordance with applicable institutional security requirements.
+accordance with applicable institutional security requirements, including
+field-level protection for sensitive identity data where applicable.
 
 ---
 
@@ -1261,6 +1259,46 @@ Dependency vulnerability scanning shall be performed as part of CI.
 
 The delivered system shall have no unresolved High or Critical
 dependency vulnerabilities at handover.
+
+---
+
+## 16.10 Security Risk Coverage
+
+### SEC-20
+
+The system's security controls and verification activities shall address
+the applicable OWASP Top 10 risks.
+
+---
+
+## 16.11 File Upload and Data-Protection Requirements
+
+### SEC-21
+
+Uploaded verification documents shall be validated server-side using the
+declared MIME type, detected file signature (magic bytes), and configured
+size limits.
+
+### SEC-22
+
+Uploaded verification documents shall be scanned for malware before they
+are made available for administrative review or other permitted access.
+
+### SEC-23
+
+Verification document binaries shall be stored outside the application
+web root and accessed only through authorized, short-lived signed URLs.
+
+### PRV-07
+
+The system shall apply purpose limitation and retain consent records
+where required by applicable data-protection obligations.
+
+### PRV-08
+
+The system shall support approved data-subject access and deletion
+requests or the institutional process used to fulfil them, subject to
+mandatory retention and audit obligations.
 
 ---
 
@@ -1313,8 +1351,9 @@ connection.
 
 ### NFR-AVAIL-01
 
-The system shall have a target availability of 99.5% during academic
-working hours.
+The system shall achieve at least 99.5% availability measured monthly
+during published academic service hours, excluding approved planned
+maintenance announced in advance.
 
 ---
 
@@ -1459,7 +1498,7 @@ application session.
 ### EXT-07
 
 Where enabled, the system shall support Google Calendar and Microsoft
-Outlook calendar integration.
+Outlook calendar integration through OAuth authorization.
 
 ### EXT-08
 
@@ -1695,6 +1734,8 @@ records them as unresolved product decisions.
 
 - Authoritative alumni record source.
 - Exact verification input set.
+- Allowed verification-document file types, size limits, and malware
+  scanning policy.
 - Exact rejected-verification retry behaviour.
 
 ## 21.2 Capacity
@@ -1777,7 +1818,8 @@ brief does not define them.
 | Notifications | PRD §7.15 | P11 §11 |
 | Roles | PRD §6 | P11 §6 |
 | Integrations | PRD §12 | P11 §§7, 12 |
-| Privacy | PRD §11, PR-10 | P11 §§2, 8, 15, 17, 22 |
+| Privacy and data protection | PRD §11, PR-10 | P11 §§2, 8, 15, 17, 22; CES §2.4 |
+| File upload security | SEC-21--23 | CES §2.4 |
 | Product release outcomes | PRD §19 | P11 §22 |
 | CES quality/security/testing | PRD foundation | CES §§1.3--1.5 |
 
@@ -1792,5 +1834,5 @@ brief does not define them.
 | Version | 1.0 |
 | Status | Foundation Draft |
 | Product baseline | P11 PRD v1.0 |
-| Source specification | EduRev Project List --- P11 |
+| Source specification | `docs/P11_Project_Source.md` — P11 source extract |
 | Engineering standard | Common Engineering Standard (CES) |

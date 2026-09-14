@@ -678,7 +678,7 @@ paths:
       tags: [Sessions]
       operationId: updateSession
       summary: Update a mentorship session
-      description: Setting status to scheduled confirms a proposed session. A scheduled session may later be completed or cancelled.
+      description: Setting status to scheduled confirms a proposed session. A proposed session may be cancelled, while a scheduled session may later be completed or cancelled.
       parameters:
         - $ref: '#/components/parameters/MentorshipId'
         - $ref: '#/components/parameters/SessionId'
@@ -1058,6 +1058,7 @@ paths:
       tags: [Sessions]
       operationId: completeCalendarAuthorization
       summary: Complete calendar-provider OAuth authorization
+      description: The callback validates the OAuth state bound to the initiating user/session before storing the provider connection; it does not establish application authentication.
       parameters:
         - $ref: '#/components/parameters/CalendarProvider'
         - name: code

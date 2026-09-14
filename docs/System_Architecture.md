@@ -12,6 +12,7 @@
 | Architecture Track | Track J — Path J1 (Next.js Full-Stack) |
 | Primary Product Baseline | Approved P11 PRD v1.0 |
 | Primary System Baseline | Approved P11 SRS v1.0 |
+| P11 Source Baseline | `docs/P11_Project_Source.md` |
 | Engineering Standard | EduRev Common Engineering Standard (CES) |
 
 ------------------------------------------------------------------------
@@ -765,7 +766,14 @@ No later operation may assume acceptance succeeded.
 
 The atomic capacity-safe operation is the correctness boundary for
 concurrent acceptance. Where multiple durable state changes must remain
-consistent, a MongoDB transaction may be used.
+consistent, a MongoDB transaction shall be used in the production
+replica-set deployment.
+
+Capacity is also released when an active mentorship ends. The capacity
+decrement and the corresponding relationship transition to ended shall
+share the same consistency boundary as the acceptance increment and
+relationship creation. No independent code path may change the capacity
+counter without the corresponding mentorship transition.
 
 The acceptance design shall remain idempotent: repeating the same
 acceptance operation shall return the existing outcome or fail safely; it
@@ -956,9 +964,10 @@ Verification module
 Administrative review
 ```
 
-The exact object-storage provider, file types, size limits, MIME rules,
-and malware-scanning controls are implementation and security decisions
-to be defined separately.
+The exact object-storage provider and policy values are deployment and
+security configuration decisions. The required validation, malware
+scanning, storage boundary, and signed-access controls are governed by the
+SRS and must remain within this architectural boundary.
 
 ------------------------------------------------------------------------
 

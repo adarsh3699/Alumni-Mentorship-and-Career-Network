@@ -145,7 +145,7 @@ The product shall represent verification status and the outcome/history of verif
 
 ### 7.2 Alumni Professional Profile
 
-Verified alumni shall be able to maintain a mentoring-oriented professional profile containing relevant professional expertise, expertise areas, mentoring interests, capacity, and availability.
+Verified alumni shall be able to maintain a mentoring-oriented professional profile containing relevant professional expertise areas, mentoring interests, capacity, and availability.
 
 ### 7.3 Capacity and Availability
 
@@ -377,7 +377,6 @@ Programme activity
 **PR-05 — Configurable limits:** The programme can configure applicable request limits.
 
 **PR-06 — Request expiry:** Unanswered requests expire according to the programme's configured policy.
-
 **PR-07 — Easy decline:** Declining a request is a valid, low-friction outcome. A decline reason may be optional.
 
 **PR-08 — Capacity-aware discovery:** Mentors who cannot accept additional mentees should not be presented as available request targets.
@@ -501,7 +500,7 @@ The supplied P11 specification does not define numerical business targets for th
 - Mentorship requests
 - Request throttling and expiry
 - Mentorship relationship
-- Scheduling and sessions
+- Scheduling, calendar integration, and sessions
 - Goals and actions
 - Feedback
 - Engagement monitoring
@@ -511,7 +510,6 @@ The supplied P11 specification does not define numerical business targets for th
 ### Supporting / Deferrable
 
 - In-platform messaging
-- Calendar integrations
 - Video-conferencing integration
 - Expanded analytics and mentor-effectiveness views
 
@@ -611,7 +609,8 @@ The MVP should allow the following product journeys to work end-to-end:
 - accept or decline easily;
 - conduct sessions;
 - manage goals/actions;
-- communicate with the student;
+- communicate with the student when in-platform messaging is included in
+  the release;
 - provide feedback.
 
 ### Institution
@@ -630,7 +629,10 @@ The MVP should allow the following product journeys to work end-to-end:
 
 ## 20. Source Basis
 
-This PRD is based on the **EduRev Project List — P11: Alumni Mentorship and Career Network** and the applicable **Common Engineering Standard (CES)**.
+This PRD is based on the authoritative P11 source extract in
+`docs/P11_Project_Source.md`, which preserves the EduRev Project List
+requirements for P11, and on the applicable **Common Engineering Standard
+(CES)**.
 
 P11-specific requirements have been preserved as product requirements, while values not defined by the source are recorded as open product decisions rather than assumed.
 

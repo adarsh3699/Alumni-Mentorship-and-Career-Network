@@ -11,7 +11,7 @@
 **ODM:** Mongoose  
 **Architecture:** Track J — Path J1 (Next.js Full-Stack)  
 **Baselines:** Approved P11 PRD v1.0, SRS v1.0, HLD v1.0  
-**Project Source:** EduRev Project List — P11  
+**Project Source:** `docs/P11_Project_Source.md` — P11 source extract
 **Engineering Standard:** Common Engineering Standard (CES)
 
 ---
@@ -1178,5 +1178,5 @@ The following items remain intentionally open because the upstream PRD/SRS/HLD/P
 | Product Baseline | P11 PRD v1.0 |
 | System Baseline | P11 SRS v1.0 |
 | Architecture Baseline | P11 HLD v1.0 |
-| Project Source | EduRev Project List — P11 |
+| Project Source | `docs/P11_Project_Source.md` — P11 source extract |
 | Engineering Standard | CES |
