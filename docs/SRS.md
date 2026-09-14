@@ -9,7 +9,7 @@
 | Document | Software Requirements Specification (SRS) |
 | Version | 1.0 |
 | Status | Foundation Draft |
-| Primary Source | Approved P11 Product Requirements Document (PRD) v1.0 |
+| Primary Source | P11 Product Requirements Document (PRD) v1.0 |
 | Reference Standard | EduRev Common Engineering Standard (CES) |
 
 ---
@@ -19,7 +19,7 @@
 | No. | Section | Purpose |
 | ---: | --- | --- |
 | 1 | [Introduction](#1-introduction) | Establishes the purpose, scope, terminology, and requirement conventions. |
-| 2 | [System Overview](#2-system-overview) | Describes the system-level view derived from the approved product requirements. |
+| 2 | [System Overview](#2-system-overview) | Describes the system-level view derived from the P11 product requirements baseline. |
 | 3 | [Actors and Access Context](#3-actors-and-access-context) | Defines system actors and their software access context. |
 | 4 | [Functional Requirement Structure](#4-functional-requirement-structure) | Defines how functional requirements are organised and identified. |
 | 5 | [M1 — Alumni Verification and Profile](#5-m1--alumni-verification-and-profile) | Specifies verification and mentor-profile behaviour. |
@@ -49,7 +49,7 @@
 
 This SRS defines the **software requirements** for P11.
 
-It translates the approved product requirements into precise,
+It translates the P11 product requirements baseline into precise,
 observable, and testable system behaviour.
 
 The SRS specifies:
@@ -116,7 +116,7 @@ applicable.
 
 The requirements in this document are derived from:
 
-1.  the approved P11 PRD v1.0;
+1.  the P11 PRD v1.0 baseline;
 2.  the authoritative P11 source extract in `docs/P11_Project_Source.md`;
 3.  the applicable Common Engineering Standard.
 
@@ -1545,6 +1545,26 @@ approved profile-prefill use case.
 
 LinkedIn shall not be required for core mentor verification, discovery,
 matching, or mentorship operation.
+
+---
+
+## 18.7 Placement Records
+
+### EXT-15
+
+Where placement-outcome reporting is enabled, the system shall obtain
+placement outcomes only from an institution-approved source or adapter.
+
+### EXT-16
+
+The system shall distinguish unavailable placement-source data from a
+valid result containing no placement outcomes.
+
+### EXT-17
+
+Placement outcomes shall remain institution-scoped and shall be available
+only to authorized institutional analytics roles. They shall not be
+exposed directly to students or mentors.
 
 ---
 

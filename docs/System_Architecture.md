@@ -10,8 +10,8 @@
 | Version | 1.0 |
 | Status | Foundation Draft |
 | Architecture Track | Track J — Path J1 (Next.js Full-Stack) |
-| Primary Product Baseline | Approved P11 PRD v1.0 |
-| Primary System Baseline | Approved P11 SRS v1.0 |
+| Primary Product Baseline | P11 PRD v1.0 |
+| Primary System Baseline | P11 SRS v1.0 |
 | P11 Source Baseline | `docs/P11_Project_Source.md` |
 | Engineering Standard | EduRev Common Engineering Standard (CES) |
 
@@ -51,7 +51,7 @@
 # 1. Architecture Purpose
 
 This HLD defines **how the P11 software system is structured** to
-satisfy the approved PRD and SRS.
+satisfy the P11 PRD and SRS baselines.
 
 It defines:
 
@@ -352,7 +352,8 @@ The system is organized into the following major runtime components.
 
 External integration adapters connect the application core to:
 SSO, alumni records, verification object storage, Google Calendar,
-Outlook, video conferencing, email/SMS, and optional LinkedIn.
+Outlook, video conferencing, email/SMS, institutional placement records,
+and optional LinkedIn.
 ```
 
 Under Track J — Path J1, the Next.js full-stack application and its
@@ -921,7 +922,9 @@ External services shall be isolated behind integration interfaces.
        External ERP    Google/Outlook   Email/SMS or Socket.IO
 ```
 
-The domain layer should not contain provider-specific logic.
+The domain layer should not contain provider-specific logic. Placement
+outcomes use a separate institution-approved adapter and do not become
+part of the alumni-records or mentoring-domain adapter.
 
 ------------------------------------------------------------------------
 
@@ -1001,6 +1004,18 @@ Its absence shall not block:
 -   matching;
 -   mentorship;
 -   sessions.
+
+------------------------------------------------------------------------
+
+## 14.6 Placement-Outcome Integration
+
+Placement outcomes are obtained through an institution-approved source or
+adapter. They are kept outside the mentoring domain's source-of-truth
+logic and are only made available to the authorized analytics boundary.
+
+The adapter shall distinguish unavailable source data from an actual
+zero-outcome result. Placement data must remain institution-scoped and
+must not be exposed directly to students or mentors.
 
 ------------------------------------------------------------------------
 
@@ -1507,7 +1522,15 @@ assigned responsibilities.
 
 ## 22.1 Environment Configuration
 
-Configuration shall be externalized through environment variables.
+Deployment configuration and secrets shall be externalized through
+environment variables or a managed secret store. Administrator-managed
+programme policies are not environment variables: matching weights,
+request policy, and engagement settings are persisted as versioned,
+institution-scoped `ProgrammeConfiguration` records in MongoDB.
+
+The configuration service loads the effective institution policy and may
+cache it in Redis with explicit invalidation. Environment values provide
+deployment defaults only when no institution-specific policy exists.
 
 Examples of configuration categories include:
 
@@ -1517,9 +1540,8 @@ Examples of configuration categories include:
 -   SSO settings;
 -   calendar integration settings;
 -   notification provider settings;
--   matching configuration;
--   request policy;
--   engagement policy.
+-   deployment defaults for matching, request, and engagement policy;
+-   provider credentials and other secrets.
 
 Exact variable names belong in the environment-variable reference
 documentation.
@@ -1654,6 +1676,21 @@ runtime are separate deployable capabilities.
 
 ------------------------------------------------------------------------
 
+## ADR-10 --- Persistent Institution-Scoped Programme Configuration
+
+**Decision:** Persist administrator-managed matching, request, and
+engagement policies as versioned institution-scoped configuration in
+MongoDB, with optional Redis caching.
+
+**Reason:** Runtime administrator updates must survive process restarts,
+apply to the correct institution, and remain auditable.
+
+**Consequence:** Environment variables provide deployment defaults and
+secrets only; policy changes use the configuration service and invalidate
+any cached effective policy.
+
+------------------------------------------------------------------------
+
 # 24. Architecture Traceability
 
 | Architecture Concern | SRS Requirement Area | Architectural Response |
@@ -1673,6 +1710,8 @@ runtime are separate deployable capabilities.
 | Analytics | FR-M10 | Analytics module and background reporting where required |
 | Institution context | CES tenant-context requirement | Institution context preserved across services and data access |
 | Verification documents | FR-M1 / EXT-01 | Object-storage adapter with pre-signed access and M1 review workflow |
+| Programme configuration | FR-M4 / FR-M5 / FR-M8 | Versioned institution-scoped configuration in MongoDB with optional Redis cache |
+| Placement outcomes | FR-M10 / EXT-15--EXT-17 | Institution-approved placement adapter and role-aware analytics boundary |
 | Background work | CFR / NFR | BullMQ workers and durable outbox dispatch |
 | Cache/rate limiting | SEC / FR-M5 | Redis with fail-closed throttling semantics |
 | Scale | NFR-PERF | Horizontally scalable application and independent workers |

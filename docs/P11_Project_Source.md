@@ -6,7 +6,10 @@ This file is the P11-only source extract from the EduRev Project List.
 It contains the P11 project specification and the applicable Common
 Engineering Standard (CES) and Track J requirements. Details for all
 other projects and alternative technology paths have intentionally been
-removed.
+removed. Where the retained original P11 wording mentions alternatives
+(for example Track P in Section 14), those references are provenance-only
+and are not selected architecture decisions for this project. The selected
+baseline is Track J — Path J1 (Next.js Full-Stack).
 
 ---
 

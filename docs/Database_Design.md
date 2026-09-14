@@ -10,7 +10,7 @@
 **Database:** MongoDB 7+  
 **ODM:** Mongoose  
 **Architecture:** Track J — Path J1 (Next.js Full-Stack)  
-**Baselines:** Approved P11 PRD v1.0, SRS v1.0, HLD v1.0  
+**Baselines:** P11 PRD v1.0, SRS v1.0, HLD v1.0
 **Project Source:** `docs/P11_Project_Source.md` — P11 source extract
 **Engineering Standard:** Common Engineering Standard (CES)
 
@@ -51,7 +51,7 @@
 
 This document defines the **logical database design** for P11.
 
-It translates the approved SRS requirements and HLD architecture into:
+It translates the P11 SRS requirements and HLD architecture into:
 
 - collections and entities;
 - relationships;
@@ -160,6 +160,9 @@ MongoDB
 ├── feedback
 ├── engagement_snapshots
 ├── messages
+├── verification_documents
+├── programme_configurations
+├── placement_outcomes
 ├── audit_entries
 └── outbox_events
 ```
@@ -169,7 +172,7 @@ VerificationRequest, ExpertiseTag, MentorCapacity, AvailabilityWindow,
 StudentProfile, CareerGoal, MatchScore, MentorshipRequest, Mentorship,
 Session, Goal, ActionItem, Feedback, Message, and EngagementSnapshot
 (P11 §8). User, Institution, AuditEntry, and OutboxEvent are supporting
-persistence entities required by the approved architecture and security
+persistence entities required by the selected architecture and security
 requirements.
 
 ---
@@ -182,6 +185,7 @@ requirements.
 | User | Core | Long-lived | Authenticated identity and role |
 | Alumnus | M1 | Long-lived | Alumni/mentor profile |
 | VerificationRequest | M1 | Workflow | Verification lifecycle |
+| VerificationDocument | M1 | Quarantined/approved | Verification evidence metadata and validation state |
 | ExpertiseTag | M1 | Reference | Expertise taxonomy |
 | MentorCapacity | M2 | Current state | Mentor capacity |
 | AvailabilityWindow | M2 | Current/history | Availability periods |
@@ -196,6 +200,8 @@ requirements.
 | Feedback | M7 | Historical | Student/mentor feedback |
 | EngagementSnapshot | M8 | Time-series | Engagement assessment |
 | Message | M9 | Conversation | Relationship message |
+| ProgrammeConfiguration | Cross-cutting | Versioned configuration | Institution-scoped administrator policies |
+| PlacementOutcome | M10 | Imported/long-lived | Authorized placement-outcome correlation data |
 | AuditEntry | Cross-cutting | Append-only | Privileged-action audit |
 | OutboxEvent | Cross-cutting | Dispatch workflow | Durable asynchronous event |
 
@@ -215,6 +221,9 @@ requirements.
 | `updatedAt` | Date | Yes | Update |
 
 **Constraint:** `code` shall be unique.
+
+The uniqueness requirement is enforced by a unique index on
+`institutions.code`.
 
 ## 5.2 User
 
@@ -283,18 +292,50 @@ must belong to the same institution as the Alumnus.
 | `_id` | ObjectId | Yes | Primary identifier |
 | `institutionId` | ObjectId | Yes | Tenant scope |
 | `alumnusId` | ObjectId | Yes | Applicant |
+| `institutionalIdentifier` | String | Yes | Protected institutional verification identifier; never student-visible |
+| `graduationYear` | Number | No | Protected alumni record attribute |
 | `status` | String | Yes | `pending`, `verified`, `rejected` |
 | `submittedAt` | Date | Yes | Submission |
 | `decidedAt` | Date | No | Decision |
 | `decidedBy` | ObjectId | No | Reviewing officer |
 | `rejectionReason` | String | No | Rejection reason |
-| `documents` | Array | No | Document metadata/references |
+| `documents` | Array[ObjectId] | No | References to VerificationDocument records |
 | `createdAt` | Date | Yes | Creation |
 | `updatedAt` | Date | Yes | Update |
 
 Verification document binaries are not stored in MongoDB; only required metadata/reference information is stored.
 
-## 6.3 ExpertiseTag
+The institutional identifier is protected at rest and is available only
+to the verification workflow. VerificationRequest history is retained;
+new decisions create an auditable state change rather than overwriting
+the original submission evidence.
+
+## 6.3 VerificationDocument
+
+| Field | Type | Required | Notes |
+|---|---|---:|---|
+| `_id` | ObjectId | Yes | Primary identifier |
+| `institutionId` | ObjectId | Yes | Tenant scope |
+| `verificationRequestId` | ObjectId | Yes | Parent request |
+| `objectKey` | String | Yes | Private object-storage reference |
+| `fileName` | String | Yes | Submitted file name |
+| `declaredContentType` | String | Yes | Caller declaration |
+| `detectedContentType` | String | No | Server-detected type after upload |
+| `sizeBytes` | Number | Yes | Validated object size |
+| `status` | String | Yes | `pending_upload`, `validating`, `approved`, `rejected` |
+| `validationMessage` | String | No | Sanitized validation result |
+| `uploadedAt` | Date | No | Upload completion |
+| `validatedAt` | Date | No | Validation completion |
+| `scannedAt` | Date | No | Malware-scan completion |
+| `createdAt` | Date | Yes | Creation |
+| `updatedAt` | Date | Yes | Update |
+
+Uploaded objects remain quarantined and unavailable to reviewers until
+server-side size, magic-byte/MIME, and malware checks succeed. The object
+storage adapter owns binary access; MongoDB stores only metadata and the
+private object reference.
+
+## 6.4 ExpertiseTag
 
 | Field | Type | Required |
 |---|---|---:|
@@ -659,7 +700,50 @@ Metrics include:
 
 Precomputed aggregates may be introduced only when measured workload requires them.
 
-## 15.2 OutboxEvent
+## 15.2 ProgrammeConfiguration
+
+Administrator-managed matching, request, and engagement policies are
+persisted as institution-scoped, versioned configuration rather than
+being represented only by environment variables.
+
+| Field | Type | Required | Notes |
+|---|---|---:|---|
+| `_id` | ObjectId | Yes | Primary identifier |
+| `institutionId` | ObjectId | Yes | Tenant scope |
+| `version` | Number | Yes | Monotonically increasing policy version |
+| `matchingWeights` | Object | Yes | Matching configuration |
+| `requestPolicy` | Object | Yes | Throttling and expiry settings |
+| `engagementSettings` | Object | Yes | Weekly assessment and thresholds |
+| `effectiveFrom` | Date | Yes | Effective time |
+| `updatedBy` | ObjectId | Yes | Administrator actor |
+| `createdAt` | Date | Yes | Creation |
+| `updatedAt` | Date | Yes | Update |
+
+Each update creates a new auditable version or an equivalent history
+record. The active version is selected within the authenticated
+institution context.
+
+## 15.3 PlacementOutcome
+
+Placement outcomes are imported from or synchronized with an approved
+institutional source. They are not inferred from mentoring activity.
+
+| Field | Type | Required | Notes |
+|---|---|---:|---|
+| `_id` | ObjectId | Yes | Primary identifier |
+| `institutionId` | ObjectId | Yes | Tenant scope |
+| `studentUserId` | ObjectId | Yes | Student associated with the outcome |
+| `outcomeType` | String | Yes | Institution-defined outcome classification |
+| `occurredAt` | Date | Yes | Outcome date/time |
+| `sourceSystem` | String | Yes | Approved institutional source |
+| `externalReference` | String | No | Source-system reference; protected |
+| `createdAt` | Date | Yes | Creation |
+| `updatedAt` | Date | Yes | Update |
+
+PlacementOutcome data is restricted to authorized institutional analytics
+and must not be exposed directly to students or mentors.
+
+## 15.4 OutboxEvent
 
 The durable outbox records asynchronous work created by a committed
 business change. It is a cross-cutting persistence entity rather than a
@@ -718,6 +802,7 @@ erDiagram
     USER ||--o| STUDENT_PROFILE : has
 
     ALUMNUS ||--o{ VERIFICATION_REQUEST : submits
+    VERIFICATION_REQUEST ||--o{ VERIFICATION_DOCUMENT : contains
     ALUMNUS ||--o| MENTOR_CAPACITY : owns
     ALUMNUS ||--o{ AVAILABILITY_WINDOW : defines
     ALUMNUS }o--o{ EXPERTISE_TAG : has
@@ -739,6 +824,10 @@ erDiagram
     MENTORSHIP ||--o{ FEEDBACK : receives
     MENTORSHIP ||--o{ ENGAGEMENT_SNAPSHOT : assessed
     MENTORSHIP ||--o{ MESSAGE : contains
+
+    INSTITUTION ||--o{ PLACEMENT_OUTCOME : records
+    USER ||--o{ PLACEMENT_OUTCOME : has
+    INSTITUTION ||--o{ PROGRAMME_CONFIGURATION : configures
 
     INSTITUTION ||--o{ AUDIT_ENTRY : scopes
     USER ||--o{ AUDIT_ENTRY : performs
@@ -786,6 +875,9 @@ Indexes are designed from actual query patterns.
 ## 17.1 Core indexes
 
 ```text
+institutions
+  { code: 1 } UNIQUE
+
 users
   { institutionId: 1, externalIdentityId: 1 } UNIQUE
 
@@ -797,6 +889,9 @@ alumni
 verification_requests
   { institutionId: 1, status: 1, submittedAt: -1 }
   { institutionId: 1, alumnusId: 1, submittedAt: -1 }
+
+verification_documents
+  { institutionId: 1, verificationRequestId: 1, status: 1 }
 
 mentor_capacities
   { institutionId: 1, alumnusId: 1 } UNIQUE
@@ -850,6 +945,14 @@ audit_entries
 outbox_events
   { institutionId: 1, deduplicationKey: 1 } UNIQUE
   { institutionId: 1, status: 1, availableAt: 1 }
+
+programme_configurations
+  { institutionId: 1, version: 1 } UNIQUE
+  { institutionId: 1, effectiveFrom: -1 }
+
+placement_outcomes
+  { institutionId: 1, studentUserId: 1, occurredAt: -1 }
+  { institutionId: 1, sourceSystem: 1, externalReference: 1 }
 ```
 
 ## 17.2 Search
@@ -1018,6 +1121,8 @@ Conceptual operation:
 ```text
 MentorCapacity
 WHERE
+  institutionId = authenticated institution
+  AND
   alumnusId = target mentor
   AND activeMentees < maxConcurrentMentees
 

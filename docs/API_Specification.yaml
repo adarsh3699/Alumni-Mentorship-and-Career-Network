@@ -4,8 +4,11 @@ info:
   version: 1.0.0
   description: |
     REST API contract for Project P11 — Verified Alumni Mentorship Matching and Engagement Platform.
-    The API is versioned under /api/v1 and is derived from the approved P11 PRD, SRS,
+    The API is versioned under /api/v1 and is derived from the P11 PRD, SRS,
     HLD, and the P11 project specification.
+    Cookie-authenticated state-changing requests require a valid X-CSRF-Token,
+    SameSite cookie policy, and Origin/Referer validation. Access tokens are
+    short-lived; refresh tokens are rotated and revoked server-side.
 
 servers:
   - url: /api/v1
@@ -63,7 +66,69 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /auth/refresh:
+    post:
+      security:
+        - refreshToken: []
+          csrfToken: []
+      tags: [Identity]
+      operationId: refreshAccessToken
+      summary: Rotate the authenticated session tokens
+      description: Validates the refresh_token HTTP-only cookie, rotates and revokes the refresh token, and issues a new short-lived access_token and refresh_token cookie pair. The request requires the CSRF protections described at the API level.
+      responses:
+        '204':
+          description: Tokens rotated and set in secure HTTP-only cookies.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/logout:
+    post:
+      security:
+        - accessToken: []
+          csrfToken: []
+      tags: [Identity]
+      operationId: logout
+      summary: Revoke the current session
+      description: Revokes the current refresh-token family and clears the access_token and refresh_token HTTP-only cookies. The request requires the CSRF protections described at the API level.
+      responses:
+        '204':
+          description: Session revoked and cookies cleared.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
   /alumni/verify:
+    get:
+      tags: [Alumni Verification]
+      operationId: listVerificationRequests
+      summary: List alumni verification requests for the review queue
+      description: Requires the Alumni Relations Officer role. Results are institution-scoped and paginated.
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, verified, rejected]
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Paginated verification review queue.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationRequestListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
     post:
       tags: [Alumni Verification]
       operationId: submitAlumniVerification
@@ -152,7 +217,7 @@ paths:
       tags: [Alumni Verification]
       operationId: createVerificationDocumentUploadUrl
       summary: Create a pre-signed verification-document upload URL
-      description: The client uploads the document directly to approved object storage using the returned short-lived URL.
+      description: The client uploads the document directly to approved object storage using the returned short-lived URL. The document remains unavailable for review until the finalize operation validates the uploaded bytes and completes malware scanning.
       parameters:
         - $ref: '#/components/parameters/RequestId'
       requestBody:
@@ -170,6 +235,60 @@ paths:
                 $ref: '#/components/schemas/VerificationDocumentUpload'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /alumni/verify/{requestId}/documents/{documentId}/finalize:
+    post:
+      tags: [Alumni Verification]
+      operationId: finalizeVerificationDocumentUpload
+      summary: Finalize and validate an uploaded verification document
+      description: Requires the Alumni Relations Officer or the submitting alumnus for the matching request. The server validates detected MIME type, magic bytes, size, and malware status from the uploaded object. The document transitions to validating and cannot be reviewed until validation succeeds.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/DocumentId'
+      responses:
+        '202':
+          description: Document accepted for validation/quarantine processing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationDocument'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /alumni/verify/{requestId}/documents/{documentId}/view-url:
+    get:
+      tags: [Alumni Verification]
+      operationId: createVerificationDocumentViewUrl
+      summary: Create a short-lived authorized document view URL
+      description: Requires an authorized Alumni Relations Officer and an approved document. The returned signed URL is short-lived and must not be persisted as a permanent link.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/DocumentId'
+      responses:
+        '200':
+          description: Short-lived signed document URL.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationDocumentViewUrl'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -380,6 +499,81 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /students/me/career-goals:
+    get:
+      tags: [Student Profile]
+      operationId: listMyCareerGoals
+      summary: List current student's career goals
+      responses:
+        '200':
+          description: Student career goals.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CareerGoalListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags: [Student Profile]
+      operationId: createMyCareerGoal
+      summary: Create a career goal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CareerGoalCreate'
+      responses:
+        '201':
+          description: Career goal created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CareerGoal'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /students/me/career-goals/{goalId}:
+    patch:
+      tags: [Student Profile]
+      operationId: updateMyCareerGoal
+      summary: Update a career goal
+      parameters:
+        - $ref: '#/components/parameters/GoalId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CareerGoalUpdate'
+      responses:
+        '200':
+          description: Career goal updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CareerGoal'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -1004,6 +1198,7 @@ paths:
       tags: [Analytics]
       operationId: getProgrammeAnalytics
       summary: Get programme analytics
+      description: Requires the Alumni Relations Officer, Placement Officer, or Administrator role. The response is institution-scoped; placement-outcome fields are returned only to roles permitted by institutional policy, and unauthorized mentor-effectiveness or placement fields are omitted rather than returned as unrestricted data.
       parameters:
         - name: from
           in: query
@@ -1232,11 +1427,27 @@ components:
       type: apiKey
       in: cookie
       name: access_token
-      description: JWT access token stored in an HTTP-only cookie. Authentication is established through university SSO/OIDC.
+      description: Short-lived JWT access token stored in an HTTP-only, Secure cookie. Authentication is established through university SSO/OIDC. Cookie-authenticated state-changing operations also require X-CSRF-Token and SameSite plus Origin/Referer validation.
+    refreshToken:
+      type: apiKey
+      in: cookie
+      name: refresh_token
+      description: Rotated refresh token stored in an HTTP-only, Secure cookie. It is accepted only by POST /auth/refresh and is revoked on rotation or logout.
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: Required on cookie-authenticated state-changing requests. The server validates the token together with the request origin and SameSite policy.
 
   parameters:
     RequestId:
       name: requestId
+      in: path
+      required: true
+      schema:
+        type: string
+    DocumentId:
+      name: documentId
       in: path
       required: true
       schema:
@@ -1406,7 +1617,7 @@ components:
 
     VerificationDocumentUpload:
       type: object
-      required: [documentId, uploadUrl, expiresAt]
+      required: [documentId, uploadUrl, expiresAt, status]
       properties:
         documentId:
           type: string
@@ -1416,6 +1627,9 @@ components:
         expiresAt:
           type: string
           format: date-time
+        status:
+          type: string
+          enum: [pending_upload]
       additionalProperties: false
 
     VerificationDecision:
@@ -1452,6 +1666,18 @@ components:
             $ref: '#/components/schemas/VerificationDocument'
       additionalProperties: false
 
+    VerificationRequestListResponse:
+      type: object
+      required: [items, meta]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/VerificationRequest'
+        meta:
+          $ref: '#/components/schemas/PageMeta'
+      additionalProperties: false
+
     VerificationDocument:
       type: object
       required: [id, fileName, status]
@@ -1462,13 +1688,23 @@ components:
           type: string
         status:
           type: string
-          enum: [pending, approved, rejected]
-        uploadUrl:
+          enum: [pending_upload, validating, approved, rejected]
+        validationMessage:
+          type: string
+          description: Non-sensitive validation result presented to an authorized reviewer.
+      additionalProperties: false
+
+    VerificationDocumentViewUrl:
+      type: object
+      required: [url, expiresAt]
+      properties:
+        url:
           type: string
           format: uri
-        viewUrl:
+          description: Short-lived signed URL. It must not be persisted as a permanent application link.
+        expiresAt:
           type: string
-          format: uri
+          format: date-time
       additionalProperties: false
 
     CalendarAuthorization:
@@ -1594,22 +1830,25 @@ components:
       additionalProperties: false
 
     AvailabilityWindow:
-      allOf:
-        - $ref: '#/components/schemas/AvailabilityWindowInput'
-        - type: object
-          required: [id]
-          properties:
-            id:
-              type: string
+      type: object
+      required: [id, startAt, endAt, timezone]
+      properties:
+        id:
+          type: string
+        startAt:
+          type: string
+          format: date-time
+        endAt:
+          type: string
+          format: date-time
+        timezone:
+          type: string
+      additionalProperties: false
 
     StudentProfileInput:
       type: object
-      required: [careerGoals, interests, targetRoles, targetIndustries]
+      required: [interests, targetRoles, targetIndustries]
       properties:
-        careerGoals:
-          type: array
-          items:
-            type: string
         interests:
           type: array
           items:
@@ -1625,17 +1864,33 @@ components:
       additionalProperties: false
 
     StudentProfile:
-      allOf:
-        - $ref: '#/components/schemas/StudentProfileInput'
-        - type: object
-          required: [id]
-          properties:
-            id:
-              type: string
+      type: object
+      required: [id, interests, targetRoles, targetIndustries]
+      properties:
+        id:
+          type: string
+        interests:
+          type: array
+          items:
+            type: string
+        targetRoles:
+          type: array
+          items:
+            type: string
+        targetIndustries:
+          type: array
+          items:
+            type: string
+        careerGoals:
+          type: array
+          description: Read-only career-goal resources. Manage them through the career-goals endpoints; they are stored separately from StudentProfile.
+          items:
+            $ref: '#/components/schemas/CareerGoal'
+      additionalProperties: false
 
     MatchResult:
       type: object
-      required: [mentor, relevanceReasons]
+      required: [mentor, rank, score, relevanceReasons]
       properties:
         mentor:
           $ref: '#/components/schemas/MentorProfile'
@@ -1684,7 +1939,7 @@ components:
 
     MentorshipRequest:
       type: object
-      required: [id, studentId, mentorId, status, createdAt]
+      required: [id, studentId, mentorId, status, createdAt, expiresAt]
       properties:
         id:
           type: string
@@ -1828,6 +2083,63 @@ components:
           $ref: '#/components/schemas/PageMeta'
       additionalProperties: false
 
+    CareerGoalCreate:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
+        status:
+          type: string
+          enum: [not_started, in_progress, completed]
+      additionalProperties: false
+
+    CareerGoalUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
+        status:
+          type: string
+          enum: [not_started, in_progress, completed]
+      minProperties: 1
+      additionalProperties: false
+
+    CareerGoal:
+      type: object
+      required: [id, title, status]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [not_started, in_progress, completed]
+      additionalProperties: false
+
+    CareerGoalListResponse:
+      type: object
+      required: [items, meta]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CareerGoal'
+        meta:
+          $ref: '#/components/schemas/PageMeta'
+      additionalProperties: false
+
     GoalCreate:
       type: object
       required: [title]
@@ -1921,6 +2233,9 @@ components:
         status:
           type: string
           enum: [pending, completed]
+        completedAt:
+          type: string
+          format: date-time
         dueDate:
           type: string
           format: date
@@ -2034,6 +2349,7 @@ components:
 
     ProgrammeAnalytics:
       type: object
+      required: [activeMentorships, activeMentors, participationRate, requestsSent, requestsAccepted, requestsDeclined, requestsExpired, requestAcceptanceRate, sessionFrequency, sessionCompletionRate, goalCompletionRate, actionItemCompletionRate, mentorUtilisationRate, engagementDecayRate, engagementRecoveryRate, studentSatisfactionScore, mentorSatisfactionScore]
       properties:
         activeMentorships:
           type: integer
@@ -2069,6 +2385,10 @@ components:
           minimum: 0
           maximum: 1
         goalCompletionRate:
+          type: number
+          minimum: 0
+          maximum: 1
+        actionItemCompletionRate:
           type: number
           minimum: 0
           maximum: 1
@@ -2139,6 +2459,7 @@ components:
 
     EngagementSettings:
       type: object
+      required: [assessmentCadence, atRiskAfterDays, inactiveAfterDays]
       properties:
         assessmentCadence:
           type: string
