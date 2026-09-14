@@ -1539,8 +1539,8 @@ The following ADRs form the initial architectural decision set.
 **Reason:** Provides a Next.js full-stack architecture aligned with the
 team's stated direction and the CES-supported path.
 
-**Consequence:** Server-side business logic is owned by the Next.js
-runtime rather than a separate Express/NestJS API application.
+**Consequence:** The App Router, Route Handlers, and Server Actions own
+the web and server-side application boundary on the Node.js runtime.
 
 ------------------------------------------------------------------------
 

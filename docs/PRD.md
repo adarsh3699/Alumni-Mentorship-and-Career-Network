@@ -197,6 +197,9 @@ The product shall support:
 
 An accepted request shall establish a mentoring relationship through which users can manage sessions, goals, action items, feedback, and communication.
 
+An active mentoring relationship may be ended according to the programme
+policy, while preserving its historical record and outcomes.
+
 ### 7.9 Scheduling and Sessions
 
 The product shall support proposing slots, booking sessions, calendar integration, reminders, and session records.
@@ -578,6 +581,7 @@ The source specification establishes the product direction but does not provide 
 14. Which placement outcomes can be used for programme analysis?
 15. What reporting views are required by each institutional role?
 16. What is the initial pilot population?
+17. Who may end a mentorship relationship, and under what conditions?
 
 ---
 

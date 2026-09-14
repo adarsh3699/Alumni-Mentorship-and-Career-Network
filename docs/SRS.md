@@ -693,6 +693,11 @@ relationship exactly once.
 The system shall notify the relevant student when a request is accepted,
 declined, or expired.
 
+### FR-M5-21 --- End Mentorship
+
+An authorized participant shall be able to end an active mentorship
+relationship according to the programme policy.
+
 ---
 
 # 10. M6 — Scheduling and Sessions
@@ -731,14 +736,18 @@ represent the session as successfully synchronized.
 
 ## 10.2 Session Management
 
+The session lifecycle shall support proposal, booking, completion, and
+cancellation.
+
 ### FR-M6-06 --- Session Record
 
-The system shall maintain a record for each scheduled mentoring session.
+The system shall maintain a record for each proposed, scheduled,
+completed, or cancelled mentoring session.
 
 ### FR-M6-07 --- Session Status
 
-The system shall maintain a distinguishable lifecycle status for
-scheduled sessions.
+The system shall maintain a distinguishable lifecycle status for each
+mentoring session.
 
 ### FR-M6-08 --- Reminder
 
@@ -1557,6 +1566,14 @@ An expired request shall never create an active mentorship.
 The system shall distinguish an active mentorship relationship from a
 non-active or ended relationship condition.
 
+The mentorship lifecycle shall support:
+
+```text
+Active
+   ↓
+Ended
+```
+
 ### ST-07
 
 Only a valid accepted request may create an active mentorship.
@@ -1566,6 +1583,12 @@ Only a valid accepted request may create an active mentorship.
 An active mentorship shall be the parent context for its valid sessions,
 goals, actions, feedback, messages, and engagement records.
 
+### ST-08A
+
+Only an active mentorship may transition to ended. Ending the relationship
+shall release its active capacity allocation while preserving historical
+records according to the retention policy.
+
 ---
 
 ## 19.4 Session
@@ -1573,6 +1596,10 @@ goals, actions, feedback, messages, and engagement records.
 The system shall distinguish at least:
 
 ```text
+Proposed
+   ├──→ Scheduled
+   └──→ Cancelled
+
 Scheduled
    ├──→ Completed
    └──→ Cancelled
@@ -1580,8 +1607,10 @@ Scheduled
 
 ### ST-09
 
-A session cannot be marked completed or cancelled unless it is in an
-eligible scheduled state.
+A session cannot be marked scheduled unless it is in the proposed state.
+A proposed session may be cancelled, while a scheduled session may be
+marked completed or cancelled. Completed and cancelled sessions cannot be
+reopened.
 
 ---
 
