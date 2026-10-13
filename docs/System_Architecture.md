@@ -249,48 +249,46 @@ These mechanisms are the Track J CES baseline.
 
 ## 4.1 Context Diagram
 
-``` text
-                         ┌───────────────────────────┐
-                         │      University SSO       │
-                         └─────────────┬─────────────┘
-                                       │
-                                       │
-┌──────────────┐                  ┌────▼─────────────────────┐
-│   Student    │                  │                          │
-└──────┬───────┘                  │      P11 PLATFORM        │
-       │                          │                          │
-       │                          │  Alumni Mentoring        │
-       ├─────────────────────────►│  & Career Network        │
-       │                          │                          │
-┌──────▼───────┐                  └─────┬────────────────────┘
-│ Alumni Mentor│                        │
-└──────┬───────┘                        │
-       │                                │
-┌──────▼────────────┐                   │
-│ Alumni Relations  │───────────────────┤
-│ Officer           │                   │
-└───────────────────┘                   │
-                                        │
-┌────────────────────┐                  │
-│ Placement Officer  │──────────────────┤
-└────────────────────┘                  │
-                                        │
-┌────────────────────┐                  │
-│   Administrator    │──────────────────┘
-└────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Users ["Platform Actors"]
+        Student["Student"]
+        Mentor["Alumni Mentor"]
+        ARO["Alumni Relations Officer (ARO)"]
+        PO["Placement Officer"]
+        Admin["Administrator"]
+    end
 
-                 External Systems
-                       │
-       ┌───────────────┼───────────────────────────┐
-       │               │                           │
-       ▼               ▼                           ▼
-Institutional      Calendars                  Notifications
-Alumni Records     Google/Outlook              Email/SMS
-       │               │
-       │               ▼
-       │          Video Conferencing
-       │
-       └───────────────────────────────────────────
+    SSO["University SSO (OAuth2 / OIDC)"]
+
+    subgraph CorePlatform ["P11 Platform Boundary"]
+        Platform["Alumni Mentoring & Career Network\n(Track J — Next.js Modular Monolith)"]
+    end
+
+    subgraph ExternalSystems ["External Systems & Services"]
+        AlumniRecords["Institutional Alumni Records (ERP / SIS)"]
+        Calendars["Calendar Services (Google Calendar / MS Outlook)"]
+        VideoConf["Video Conferencing (Google Meet / Zoom / MS Teams)"]
+        Notifications["Notification Providers (Email / SMS)"]
+        DocStorage["Verification Document Object Storage"]
+        PlacementRecords["Institutional Placement Records"]
+        LinkedIn["LinkedIn (Optional Profile Prefill)"]
+    end
+
+    SSO -->|"Authenticates identity & roles"| Platform
+    Student -->|"Discovers mentors, requests sessions, tracks goals"| Platform
+    Mentor -->|"Configures capacity, accepts requests, mentors"| Platform
+    ARO -->|"Reviews verifications, oversees relationships"| Platform
+    PO -->|"Monitors placement & mentoring analytics"| Platform
+    Admin -->|"Manages programme configuration & system audit"| Platform
+
+    Platform -->|"Validates degrees & graduation records"| AlumniRecords
+    Platform -->|"Syncs availability & session events"| Calendars
+    Platform -->|"Generates secure meeting links"| VideoConf
+    Platform -->|"Dispatches transactional notifications"| Notifications
+    Platform -->|"Stores & signs verification documents"| DocStorage
+    Platform -->|"Aggregates career placement outcomes"| PlacementRecords
+    Platform -.->|"Optional profile prefill"| LinkedIn
 ```
 
 Verification documents are stored through an object-storage integration
@@ -303,57 +301,73 @@ not treat uploaded document binaries as ordinary domain records.
 
 The system is organized into the following major runtime components.
 
-``` text
-                         Internet
-                            │
-                            ▼
-                ┌─────────────────────────┐
-                │ Next.js Full-Stack      │
-                │ Application             │
-                │                         │
-                │ App Router              │
-                │ Server Components       │
-                │ Client Components       │
-                │ Route Handlers          │
-                │ Server Actions          │
-                └──────────┬──────────────┘
-                           │
-                           ▼
-                ┌─────────────────────┐
-                │  Application Core   │
-                │  Modular Monolith   │
-                │                     │
-                │ Domain Services     │
-                │ Authorization       │
-                │ Integration Layer   │
-                │ Notification Logic  │
-                └──────┬──────┬───────┘
-                       │      │
-             ┌─────────┘      └──────────┐
-             ▼                           ▼
-      ┌───────────────┐           ┌─────────────────┐
-      │   MongoDB     │           │      Redis      │
-      │  Primary DB   │           │ Cache / Limits  │
-      └───────────────┘           │ Shared State    │
-                                  └────────┬────────┘
-                                           │
-                                           ▼
-                                  ┌─────────────────┐
-                                  │     BullMQ      │
-                                  │  Job Queues     │
-                                  └────────┬────────┘
-                                           │
-                                           ▼
-                                  ┌─────────────────┐
-                                  │ Worker Runtime  │
-                                  │ Scheduled /     │
-                                  │ Background Work │
-                                  └─────────────────┘
+```mermaid
+flowchart TB
+    Client["User Browsers & Mobile Clients"] -->|"HTTPS / WSS"| Edge["Edge / CDN / Reverse Proxy"]
 
-External integration adapters connect the application core to:
-SSO, alumni records, verification object storage, Google Calendar,
-Outlook, video conferencing, email/SMS, institutional placement records,
-and optional LinkedIn.
+    subgraph NextRuntime ["Next.js Full-Stack Application Runtime (Node.js)"]
+        AppRouter["App Router (UI / Server & Client Components)"]
+        RouteHandlers["Route Handlers (REST Endpoints)"]
+        ServerActions["Server Actions (Mutations & Forms)"]
+
+        subgraph CoreMonolith ["Application Core (Modular Monolith)"]
+            DomainServices["Domain Services (M1 - M10)"]
+            AuthBoundary["Authentication & RBAC Context Resolver"]
+            PrivacyBoundary["Centralized Privacy Filter"]
+            OutboxMgr["Durable Outbox Dispatcher"]
+            Adapters["Integration Adapters"]
+        end
+
+        AppRouter --> CoreMonolith
+        RouteHandlers --> CoreMonolith
+        ServerActions --> CoreMonolith
+    end
+
+    Edge --> AppRouter
+    Edge --> RouteHandlers
+    Edge --> ServerActions
+
+    subgraph DataTier ["Persistence & Caching Tier"]
+        MongoDB[("MongoDB 7+ Replica Set\n(Primary Authoritative DB)")]
+        Redis[("Redis 7+\n(Cache / Rate Limits / Transient State)")]
+    end
+
+    subgraph AsyncTier ["Background Processing Tier"]
+        BullMQ["BullMQ Job Queues\n(Redis-backed)"]
+        WorkerRuntime["Worker Runtime\n(Scheduled & Event-Driven Jobs)"]
+    end
+
+    subgraph RealtimeTier ["Realtime Tier (Optional M9)"]
+        SocketServer["Socket.IO Realtime Gateway"]
+    end
+
+    subgraph ExternalBoundary ["External Systems"]
+        ExtSSO["University SSO"]
+        ExtAlumni["Alumni ERP / SIS"]
+        ExtCalendar["Google / Outlook Calendars"]
+        ExtVideo["Video Conferencing APIs"]
+        ExtNotify["Email / SMS Providers"]
+        ExtStorage["S3-Compatible Object Storage"]
+    end
+
+    CoreMonolith -->|"Mongoose Models (Module-Scoped)"| MongoDB
+    CoreMonolith -->|"Rate Limiting / Cached Reads"| Redis
+    CoreMonolith -->|"Writes Outbox Events"| MongoDB
+    OutboxMgr -->|"Publishes Queued Jobs"| BullMQ
+    BullMQ --> WorkerRuntime
+    WorkerRuntime -->|"Updates Domain State"| MongoDB
+    WorkerRuntime -->|"Dispatches Alerts"| ExtNotify
+
+    Edge -.->|"WebSocket"| SocketServer
+    SocketServer -.->|"Cluster Coordination"| Redis
+    SocketServer -.->|"Persists Chat Messages"| MongoDB
+
+    Adapters --> ExtSSO
+    Adapters --> ExtAlumni
+    Adapters --> ExtCalendar
+    Adapters --> ExtVideo
+    Adapters --> ExtNotify
+    Adapters --> ExtStorage
 ```
 
 Under Track J — Path J1, the Next.js full-stack application and its
@@ -373,16 +387,18 @@ added without changing the M9 domain boundary.
 
 Each module follows the same internal conceptual layering:
 
-``` text
-Presentation / Interface
-        ↓
-Application Services
-        ↓
-Domain Logic
-        ↓
-Module Data Access
-        ↓
-MongoDB
+```mermaid
+flowchart TD
+    Presentation["1. Presentation / Interface Layer\n(Route Handlers, Server Actions, Server/Client Components)"]
+    AppServices["2. Application Services Layer\n(Use-Case Orchestration, Context RBAC, Transactions, Outbox Dispatch)"]
+    DomainLogic["3. Domain Logic Layer\n(Business Rules, Invariants, State Machines, Capacity & Matching)"]
+    DataAccess["4. Module Data Access Layer\n(Mongoose Persistence Models & Queries - Strictly Module-Scoped)"]
+    Database[("5. MongoDB Database\n(Replica Set Collections)")]
+
+    Presentation -->|"Invokes with parsed & validated DTOs"| AppServices
+    AppServices -->|"Executes pure business logic"| DomainLogic
+    AppServices -->|"Performs transactional persistence"| DataAccess
+    DataAccess -->|"Durable queries & atomic mutations"| Database
 ```
 
 Cross-cutting infrastructure is accessed through controlled
@@ -451,6 +467,49 @@ A module shall not directly query another module's persistence model.
 These dependencies preserve the P11 module relationships specified in
 the source brief.
 
+```mermaid
+flowchart TD
+    subgraph OnboardingProfiles ["Identity & Profiles"]
+        M1["M1: Alumni Verification & Profile"]
+        M2["M2: Capacity & Availability"]
+        M3["M3: Student Career Profile"]
+    end
+
+    subgraph MatchingConnection ["Discovery & Connection"]
+        M4["M4: Matching & Recommendation"]
+        M5["M5: Requests & Mentorship Lifecycle"]
+    end
+
+    subgraph ActiveMentoring ["Active Relationship Lifecycle"]
+        M6["M6: Scheduling & Sessions"]
+        M7["M7: Goals & Feedback"]
+        M8["M8: Engagement & Health Nudges"]
+        M9["M9: Messaging (Optional)"]
+    end
+
+    subgraph GovernanceAnalytics ["Programme Governance"]
+        M10["M10: Programme Analytics & Reporting"]
+    end
+
+    M1 -->|"Verified status & profile"| M2
+    M1 -->|"Mentor credentials"| M4
+    M2 -->|"Capacity check & consumption"| M4
+    M3 -->|"Student goals & preferences"| M4
+
+    M4 -->|"Recommended mentors"| M5
+    M2 -->|"Atomic capacity deduction"| M5
+
+    M5 -->|"Active mentorship context"| M6
+    M5 -->|"Authorized channel context"| M9
+
+    M6 -->|"Completed session records"| M7
+    M6 -->|"Session activity timestamps"| M8
+    M7 -->|"Goal milestones & sentiment"| M8
+
+    M7 -->|"Outcome & satisfaction data"| M10
+    M8 -->|"Health & dropout-risk scores"| M10
+```
+
 ------------------------------------------------------------------------
 
 ## 7.2 Module Ownership Rule
@@ -471,12 +530,24 @@ Other modules interact through the exposed internal service interface.
 
 For example:
 
-``` text
-M5 Requests
-     │
-     ├── calls M2 capacity service
-     │
-     └── does NOT directly query M2 models
+```mermaid
+flowchart LR
+    subgraph ModuleM5 ["M5 Requests Module"]
+        M5Service["M5 Request Application Service"]
+        M5Model[("M5 Request Model")]
+    end
+
+    subgraph ModuleM2 ["M2 Capacity Module"]
+        M2Service["M2 Capacity Service Interface"]
+        M2Model[("M2 Capacity Model")]
+    end
+
+    M5Service -->|"Allowed: calls service interface"| M2Service
+    M2Service -->|"Internal module access"| M2Model
+    M5Service -.->|"FORBIDDEN: direct cross-module query"| M2Model
+
+    style M2Model stroke:#ef4444,stroke-width:2px;
+    linkStyle 2 stroke:#ef4444,stroke-width:2px,stroke-dasharray: 5 5;
 ```
 
 This follows the CES requirement that modules communicate through
@@ -504,28 +575,29 @@ design.
 
 Typical interactive operation:
 
-``` text
-Client
-  ↓
-Next.js interface
-  ↓
-Authentication context
-  ↓
-Authorization
-  ↓
-Module application service
-  ↓
-Domain validation/rules
-  ↓
-Module data access
-  ↓
-MongoDB
-  ↓
-Domain result
-  ↓
-Privacy-aware output
-  ↓
-Client
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as User / Browser
+    participant Gateway as Next.js Gateway (App Router / Route Handler)
+    participant Auth as Auth & Context Resolver
+    participant AppService as Module Application Service
+    participant Domain as Domain Business Logic
+    participant DB as MongoDB
+    participant Privacy as Privacy Output Boundary
+
+    Client->>Gateway: 1. HTTP Request / Server Action
+    Gateway->>Auth: 2. Extract Session & Resolve Tenant/Role Context
+    Auth-->>Gateway: 3. Authenticated Context (userId, institutionId, roles)
+    Gateway->>AppService: 4. Execute Command / Query (Context, DTO)
+    AppService->>Domain: 5. Validate Invariants & Business Rules
+    Domain-->>AppService: 6. Invariants Satisfied
+    AppService->>DB: 7. Atomic Mutation / Query (Scoped Model)
+    DB-->>AppService: 8. Raw Persistence Record
+    AppService->>Privacy: 9. Filter Sensitive / PII Fields
+    Privacy-->>AppService: 10. Privacy-Safe Response DTO
+    AppService-->>Gateway: 11. Success Response
+    Gateway-->>Client: 12. HTTP 200 / Rendered UI
 ```
 
 The client never becomes the owner of a business rule.
@@ -536,22 +608,29 @@ The client never becomes the owner of a business rule.
 
 For background work:
 
-``` text
-User/System Event
-       ↓
-Application Service
-       ↓
-Create Job
-       ↓
-Redis / BullMQ
-       ↓
-Worker
-       ↓
-Module Service
-       ↓
-MongoDB / External Service
-       ↓
-Result / Notification
+```mermaid
+sequenceDiagram
+    autonumber
+    participant AppService as Application Service
+    participant Mongo as MongoDB (State & Outbox)
+    participant Dispatcher as Outbox Dispatcher
+    participant Redis as Redis / BullMQ Queue
+    participant Worker as Background Worker
+    participant Ext as External Adapter / SMTP / SMS
+
+    AppService->>Mongo: 1. Commit Domain State + Outbox Event (Atomic Transaction)
+    Note over AppService,Mongo: Zero event loss guaranteed
+    Dispatcher->>Mongo: 2. Poll Pending Outbox Records
+    Dispatcher->>Redis: 3. Enqueue Job to BullMQ
+    Dispatcher->>Mongo: 4. Mark Outbox Record Dispatched
+    Redis->>Worker: 5. Dequeue Job for Execution
+    Worker->>Worker: 6. Execute Idempotent Job Logic
+    alt External Communication
+        Worker->>Ext: 7a. Deliver Email / SMS / Webhook
+    else Scheduled Batch / Expiry
+        Worker->>Mongo: 7b. Expire Old Requests / Aggregate Metrics
+    end
+    Worker->>Redis: 8. Acknowledge Job Success
 ```
 
 ------------------------------------------------------------------------
@@ -587,13 +666,29 @@ notification work cannot starve engagement or expiry processing.
 
 Example:
 
-``` text
-BullMQ
-├── request-expiry
-├── engagement
-├── notifications
-├── calendar
-└── reporting
+```mermaid
+flowchart LR
+    BullMQ["BullMQ on Redis"]
+
+    subgraph Queues ["Isolated Job Queues"]
+        Q1["request-expiry\n(High Priority / Scheduled)"]
+        Q2["engagement\n(Weekly Batch / Nudges)"]
+        Q3["notifications\n(High Volume / Burst-Tolerant)"]
+        Q4["calendar\n(External OAuth Sync)"]
+        Q5["reporting\n(Heavy Analytics / Long-Running)"]
+    end
+
+    BullMQ --> Q1
+    BullMQ --> Q2
+    BullMQ --> Q3
+    BullMQ --> Q4
+    BullMQ --> Q5
+
+    Q1 --> W1["Expiry Worker"]
+    Q2 --> W2["Engagement Worker"]
+    Q3 --> W3["Notification Worker"]
+    Q4 --> W4["Calendar Worker"]
+    Q5 --> W5["Reporting Worker"]
 ```
 
 The exact queue names remain an implementation detail and may be refined
@@ -623,40 +718,46 @@ This follows the CES scheduling rule.
 Matching belongs inside the application/domain layer rather than in the
 frontend or a separate microservice.
 
-``` text
-Student Career Context
-        +
-Mentor Professional Context
-        +
-Capacity / Availability
-        ↓
-   Matching Service
-        ↓
- Ranked Candidate Set
-        +
- Explanation
+```mermaid
+flowchart TD
+    subgraph Inputs ["Matching Inputs"]
+        S["Student Career Context (M3)\n- Target Roles & Industry\n- Skills to develop\n- Programme stage"]
+        M["Mentor Professional Context (M1)\n- Industry, Current Title, Org\n- Verified Expertise Tags\n- Mentoring topics"]
+        C["Capacity & Availability (M2)\n- Active mentees < Max capacity\n- Compatible meeting windows"]
+    end
+
+    subgraph Service ["M4 Matching Service"]
+        Engine["Deterministic Multi-Factor Scoring Engine\n(Weights & Rules configured by Institution)"]
+    end
+
+    subgraph Outputs ["Result Set"]
+        Ranked["Ranked Mentor Candidates\n(Ordered by Composite Score)"]
+        Reasoning["Transparent Match Explanations\n(Dynamic breakdown of alignment factors)"]
+    end
+
+    S --> Service
+    M --> Service
+    C --> Service
+    Service --> Ranked
+    Service --> Reasoning
 ```
 
 ------------------------------------------------------------------------
 
 ## 10.2 Matching Flow
 
-``` text
-Student requests recommendations
-        ↓
-Load permitted student career context
-        ↓
-Identify eligible mentor candidates
-        ↓
-Remove unavailable/full mentors
-        ↓
-Evaluate configured matching factors
-        ↓
-Rank candidates
-        ↓
-Generate explanation
-        ↓
-Return privacy-safe result
+```mermaid
+flowchart TD
+    A(["Student Requests Recommendations"]) --> B["Load Permitted Student Career Context (M3)"]
+    B --> C["Identify Eligible Mentor Candidates (M1)"]
+    C --> D{"Filter: Available & Capacity > 0? (M2)"}
+    D -- No --> E["Exclude Unavailable / Full Mentors"]
+    D -- Yes --> F["Evaluate Configured Matching Factors (Domain, Skills, Affinity)"]
+    F --> G["Compute Composite Match Score"]
+    G --> H["Rank Candidates Descending"]
+    H --> I["Generate Explainability Breakdown"]
+    I --> J["Apply Centralized Privacy Masking (PRV-01)"]
+    J --> K(["Return Privacy-Safe Ranked Mentors + Explanations"])
 ```
 
 The P11 brief requires matching to be computed on demand with capacity
@@ -704,24 +805,23 @@ This condition must hold even during concurrent acceptance.
 
 ------------------------------------------------------------------------
 
-## 11.2 Acceptance Flow
+## 11.2 Acceptance Flow and Concurrency Strategy
 
-``` text
-Mentor Request
-      ↓
-Check request state
-      ↓
-Check mentor eligibility
-      ↓
-Check current capacity
-      ↓
-ATOMIC CAPACITY-SAFE UPDATE
-      ↓
-If successful
-      → create/activate mentorship
-      ↓
-If failed
-      → reject acceptance
+```mermaid
+flowchart TD
+    subgraph NonAtomic ["Anti-Pattern: Vulnerable Non-Atomic Read-Then-Write (Prohibited)"]
+        R1["1. Read Current Active Mentees Count"] --> R2["2. Check count < maxCapacity in app logic"]
+        R2 --> R3["3. Insert new Mentorship record"]
+        Rnote["Vulnerability: 2 concurrent accepts both read count=2 (limit=2), both pass check, capacity exceeded!"]
+    end
+
+    subgraph AtomicPattern ["P11 Enforced Atomic Capacity Pattern (Track J)"]
+        A1["Mentor initiates 'Accept Request'"] --> A2["Verify MentorshipRequest.status == PENDING"]
+        A2 --> A3["MongoDB Atomic Conditional Update:\nfindOneAndUpdate(\n  {\n    mentorId: id,\n    activeMentees: { $lt: maxCapacity }\n  },\n  { $inc: { activeMentees: 1 } }\n)"]
+        A3 --> Outcome{"Document Matched & Modified?"}
+        Outcome -- "YES: Capacity Reserved" --> S1["Set Request.status = ACCEPTED\nCreate Mentorship Record\nCommit Transaction"]
+        Outcome -- "NO: Capacity Limit Reached" --> S2["Fail Request Acceptance Safely\nZero state corruption\nReturn HTTP 409 / Capacity Exceeded"]
+    end
 ```
 
 ------------------------------------------------------------------------
@@ -735,19 +835,8 @@ capacity has already been reached**.
 Therefore the acceptance operation shall use an atomic database
 operation whose condition includes the mentor's current capacity.
 
-The architecture must not use:
-
-``` text
-read count
-   ↓
-check count
-   ↓
-write relationship
-```
-
-as two independent operations without an atomic condition.
-
-That pattern is vulnerable to a race condition.
+The architecture strictly prohibits using independent read-then-write
+operations without an atomic condition.
 
 ------------------------------------------------------------------------
 
@@ -755,11 +844,9 @@ That pattern is vulnerable to a race condition.
 
 If the atomic capacity operation fails:
 
-``` text
-No new active mentorship
-Request remains non-accepted
-User receives a capacity-related outcome
-```
+- No new active mentorship is created.
+- The request remains in non-accepted state.
+- The user receives a clear capacity-related outcome.
 
 No later operation may assume acceptance succeeded.
 
@@ -786,18 +873,31 @@ shall not create a second mentorship or consume capacity twice.
 
 ## 12.1 Authentication Flow
 
-``` text
-User
- ↓
-University SSO
- ↓
-OIDC/OAuth2 authentication
- ↓
-Application identity established
- ↓
-Role resolved
- ↓
-Authenticated application context
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as User (Student / Mentor / Staff)
+    participant App as Next.js Web App
+    participant SSO as University IdP / SSO (OAuth2 / OIDC)
+    participant AuthEngine as Identity & Role Resolver
+    participant MFA as TOTP MFA Guard (Staff / Admin)
+    participant Session as Secure Session Cookie
+
+    User->>App: 1. Click Login
+    App->>SSO: 2. Redirect with OIDC Authentication Request
+    User->>SSO: 3. Authenticate with Institutional Credentials
+    SSO-->>App: 4. Callback with Auth Code
+    App->>SSO: 5. Exchange Code for ID & Access Tokens
+    SSO-->>App: 6. Validated Claims (email, eduPersonAffiliation)
+    App->>AuthEngine: 7. Map Claims to Local User & Roles
+    alt Admin / Staff Role
+        AuthEngine->>MFA: 8a. Challenge TOTP MFA
+        User->>MFA: 8b. Submit 6-digit TOTP Token
+        MFA-->>AuthEngine: 8c. MFA Verified
+    end
+    AuthEngine->>Session: 9. Sign HTTP-Only Secure JWT Session
+    Session-->>App: 10. Established Authenticated Context
+    App-->>User: 11. Redirect to Role-Scoped Dashboard
 ```
 
 Administrative users additionally satisfy the required MFA policy.
@@ -808,31 +908,36 @@ Administrative users additionally satisfy the required MFA policy.
 
 Authorization uses:
 
-``` text
-Role
-  +
-Resource relationship
-  +
-Applicable attributes
-  ↓
-Allow / Deny
+```mermaid
+flowchart TD
+    subgraph ContextInputs ["Authorization Context Inputs"]
+        R["User Role\n(Student, Mentor, ARO, Placement, Admin)"]
+        Rel["Resource Relationship\n(Owner, Assigned Mentor, Institution Member)"]
+        Attr["Action Attributes\n(Target Institution, Active Status, Lifecycle Stage)"]
+    end
+
+    subgraph PolicyEngine ["Server-Side ABAC Evaluation Engine"]
+        Eval{"Evaluate Policy Matrix"}
+    end
+
+    subgraph Decision ["Access Decision"]
+        Allow["Allow Request\n(Proceed to Domain Service)"]
+        Deny["Deny Request\n(HTTP 403 Forbidden + Audit Log)"]
+    end
+
+    R --> Eval
+    Rel --> Eval
+    Attr --> Eval
+
+    Eval -->|"Rule Matched"| Allow
+    Eval -->|"Ownership Mismatch or Unauthorized"| Deny
 ```
 
 Examples:
 
-``` text
-Student
-  → own career profile ✓
-  → another student's career profile ✗
-
-Mentor
-  → own requests ✓
-  → another mentor's requests ✗
-
-Placement Officer
-  → permitted placement/mentoring analytics ✓
-  → mentor private management data ✗
-```
+- **Student:** Own career profile: Allow; Another student's career profile: Deny.
+- **Mentor:** Own requests: Allow; Another mentor's requests: Deny.
+- **Placement Officer:** Permitted placement/mentoring analytics: Allow; Mentor private management data: Deny.
 
 ------------------------------------------------------------------------
 
@@ -854,19 +959,31 @@ checks.
 
 Private mentor contact information is treated as restricted data.
 
-``` text
-                     Mentor Data
-                         │
-            ┌────────────┴────────────┐
-            │                         │
-            ▼                         ▼
-     Student-visible             Restricted
-       profile data            contact information
-            │                         │
-            ▼                         ▼
-      Student output            Never included
-                                  in student
-                                    output
+```mermaid
+flowchart LR
+    subgraph DataStore ["Authoritative MongoDB Storage"]
+        Raw["Mentor Profile Entity\n- Full Name, Bio\n- Company, Job Title\n- RESTRICTED: Email Address\n- RESTRICTED: Phone Number"]
+    end
+
+    subgraph Domain ["Domain Layer"]
+        Query["Mentor Query Service"]
+    end
+
+    subgraph PrivacyBoundary ["Centralized Privacy Serialization Filter (PRV-01)"]
+        Gate{"Requester Role / Target"}
+        PublicView["Student / Public View:\n- Name, Bio, Org, Title\n- email: OMITTED\n- phone: OMITTED"]
+        AdminView["Authorized Staff / Self View:\n- Complete Profile with Contact Details"]
+    end
+
+    subgraph OutputSurfaces ["Consumer Surfaces"]
+        StudentPortal["Student Portal / Search Results\n(Zero PII Leakage Surface)"]
+        AdminPortal["Staff Administration Portal"]
+    end
+
+    Raw --> Query
+    Query --> Gate
+    Gate -- "Student / Anonymous" --> PublicView --> StudentPortal
+    Gate -- "Staff / Owner" --> AdminView --> AdminPortal
 ```
 
 ------------------------------------------------------------------------
@@ -875,18 +992,6 @@ Private mentor contact information is treated as restricted data.
 
 All student-facing mentor data shall pass through a centralized
 privacy-aware output boundary.
-
-The design goal is:
-
-``` text
-Domain data
-     ↓
-Authorization
-     ↓
-Privacy filtering
-     ↓
-Student-visible representation
-```
 
 The architecture shall not rely on individual UI components remembering
 which fields are private.
@@ -910,16 +1015,36 @@ are absent.
 
 External services shall be isolated behind integration interfaces.
 
-``` text
-                    Application Core
-                           │
-             ┌─────────────┼──────────────┐
-             ▼             ▼              ▼
-      Alumni Records    Calendar       Notification /
-         Adapter        Adapter       Realtime Boundary
-             │             │              │
-             ▼             ▼              ▼
-       External ERP    Google/Outlook   Email/SMS or Socket.IO
+```mermaid
+flowchart TD
+    subgraph Core ["Application Core (Domain Logic)"]
+        DomainM1["M1 Verification"]
+        DomainM6["M6 Scheduling"]
+        DomainM10["M10 Analytics"]
+        DomainNotify["Notification Core"]
+    end
+
+    subgraph Adapters ["Integration Adapter Layer (Anti-Corruption)"]
+        AlumniAd["Alumni Records Adapter"]
+        StorageAd["Object Storage Adapter"]
+        CalAd["Calendar Adapter (OAuth2)"]
+        PlaceAd["Placement Records Adapter"]
+        NotifyAd["Notification Adapter"]
+    end
+
+    subgraph ExternalVendors ["External Services & Providers"]
+        ERP["Institutional ERP / SIS"]
+        S3Bucket[("S3-Compatible Object Store")]
+        Calendars["Google Calendar & MS Outlook"]
+        CampusPlacements["Campus Placement DB"]
+        EmailSMS["SendGrid / SES / Twilio"]
+    end
+
+    DomainM1 --> AlumniAd --> ERP
+    DomainM1 --> StorageAd --> S3Bucket
+    DomainM6 --> CalAd --> Calendars
+    DomainM10 --> PlaceAd --> CampusPlacements
+    DomainNotify --> NotifyAd --> EmailSMS
 ```
 
 The domain layer should not contain provider-specific logic. Placement
@@ -928,44 +1053,40 @@ part of the alumni-records or mentoring-domain adapter.
 
 ------------------------------------------------------------------------
 
-## 14.2 Alumni Verification Integration
+## 14.2 Alumni Verification Integration and Document Storage
 
-``` text
-Verification Service
-       ↓
-Alumni Record Adapter
-       ↓
-Institutional Source
-       ↓
-Verification Result
-       ↓
-Verification Domain Logic
+P11 verification includes an institutional check and an administrative
+document-review workflow. The architecture isolates document binaries in
+object storage while the verification module owns review state and references.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Alumnus as Alumni Mentor
+    participant Web as Next.js Web App
+    participant StorageAdapter as Object Storage Adapter
+    participant S3 as Object Storage (S3)
+    participant M1 as M1 Verification Service
+    actor Staff as ARO / Administrator
+
+    Alumnus->>Web: 1. Upload degree proof document
+    Web->>StorageAdapter: 2. Request pre-signed upload URL
+    StorageAdapter->>S3: 3. Generate pre-signed PUT URL
+    S3-->>StorageAdapter: 4. Secure temporary PUT URL
+    StorageAdapter-->>Web: 5. Return upload URL
+    Web->>S3: 6. Direct upload binary to S3
+    Web->>M1: 7. Submit VerificationRequest (doc reference, hash, metadata)
+    Note over M1: Status: PENDING_REVIEW
+    Staff->>Web: 8. Access verification review queue
+    Web->>M1: 9. Fetch verification details
+    M1->>StorageAdapter: 10. Generate temporary read pre-signed URL
+    StorageAdapter->>S3: 11. Generate GET pre-signed URL (15-min TTL)
+    S3-->>Staff: 12. View document securely in browser
+    Staff->>M1: 13. Record Verification Decision (Approved / Rejected)
 ```
 
 A temporary external-system failure must never be interpreted as a
 successful verification.
-
-------------------------------------------------------------------------
-
-## 14.3 Verification Document Storage
-
-P11 verification includes an administrative document-review workflow.
-The architecture shall isolate document binaries in object storage while
-the verification module owns their review state and references.
-
-``` text
-Verification document
-        ↓
-Object-storage adapter
-        ↓
-Object storage
-        ↓
-Pre-signed access
-        ↓
-Verification module
-        ↓
-Administrative review
-```
 
 The exact object-storage provider and policy values are deployment and
 security configuration decisions. The required validation, malware
@@ -1025,19 +1146,16 @@ must not be exposed directly to students or mentors.
 
 Business event:
 
-``` text
-Domain Event
-     ↓
-Notification Orchestrator
-     ↓
-Notification Job
-     ↓
-BullMQ
-     ↓
-Worker
-     ├── Email
-     ├── SMS
-     └── In-App
+```mermaid
+flowchart TD
+    DomainEvent["Domain Event\n(e.g., SessionBooked, RequestReceived)"] --> Outbox[("Durable Outbox\n(MongoDB)")]
+    Outbox -->|"Transactional Poller"| Dispatcher["Outbox Dispatcher"]
+    Dispatcher -->|"Enqueue Job"| Queue["BullMQ Notifications Queue"]
+    Queue --> Worker["BullMQ Notification Worker"]
+
+    Worker -->|"Send Email"| ChEmail["Email Provider (SendGrid / SES)"]
+    Worker -->|"Send SMS"| ChSMS["SMS Gateway (Twilio)"]
+    Worker -->|"Stream to Client"| ChInApp["In-App Realtime Stream"]
 ```
 
 The notification mechanism shall not own the underlying business state.
@@ -1051,42 +1169,41 @@ business outcome.
 
 ------------------------------------------------------------------------
 
-## 15.2 Messaging Architecture
+## 15.2 Messaging Architecture and Scale-Out Path
 
-For enabled M9 messaging:
+For enabled M9 messaging, clients connect over WebSockets to a
+Socket.IO realtime layer backed by Redis for multi-instance pub/sub and
+MongoDB for persistent conversation history:
 
-``` text
-Student / Mentor
-       ↓
-Socket.IO
-       ↓
-Messaging Boundary
-       ↓
-M9 Messaging Module
-       ↓
-MongoDB
+```mermaid
+flowchart LR
+    subgraph Clients ["Connected Clients"]
+        S["Student Browser"]
+        M["Mentor Browser"]
+    end
+
+    subgraph RealtimeSubsystem ["Realtime Gateway (Socket.IO)"]
+        Node1["Socket.IO Node 1"]
+        Node2["Socket.IO Node 2"]
+    end
+
+    subgraph StateBus ["Cluster State & History"]
+        RedisBus[("Redis Pub/Sub\n(Cross-node Broadcast)")]
+        ChatDB[("MongoDB\n(Durable Message History)")]
+    end
+
+    S <-->|"WSS"| Node1
+    M <-->|"WSS"| Node2
+    Node1 <--> RedisBus
+    Node2 <--> RedisBus
+    Node1 -->|"Persist on Send"| ChatDB
+    Node2 -->|"Persist on Send"| ChatDB
 ```
 
 The messaging layer must still use the same relationship authorization
 rules as other mentorship operations.
 
 The Track J P11 specification identifies Socket.IO for messaging.
-
-------------------------------------------------------------------------
-
-## 15.3 Scale-Out Path
-
-If realtime traffic grows enough to justify separation:
-
-``` text
-Web Application
-      │
-      ├── HTTP / domain operations
-      │
-      └── Realtime connection layer
-                 │
-                 └── Redis-backed coordination
-```
 
 The logical module boundary remains unchanged.
 
@@ -1204,22 +1321,16 @@ Operational monitoring shall cover:
 
 ## 18.1 Security Layers
 
-``` text
-Internet
-   ↓
-TLS
-   ↓
-Authentication
-   ↓
-Authorization
-   ↓
-Input Validation
-   ↓
-Business Rules
-   ↓
-Privacy Filtering
-   ↓
-Persistence
+```mermaid
+flowchart TD
+    L1["1. Network & Transport Security\n(TLS 1.3, Edge CDN / DDoS Protection)"] -->
+    L2["2. Perimeter Rate Limiting\n(IP-based & User-based Limits via Redis)"] -->
+    L3["3. Authentication & MFA\n(University SSO / OIDC + TOTP for Admin & Staff)"] -->
+    L4["4. Server-Side Input Validation\n(Strict Zod Schemas on Route Handlers & Server Actions)"] -->
+    L5["5. Context-Aware Authorization\n(Role + Resource Ownership + Tenant Context)"] -->
+    L6["6. Centralized Privacy Filter\n(Output Serialization Masking of Alumni PII)"] -->
+    L7["7. Tenant Data Isolation\n(Strict Institution ID Query Scoping)"] -->
+    L8[("8. Durable & Encrypted Storage\n(MongoDB TLS, Encryption at Rest, Immutable Audit Trail)")]
 ```
 
 No single layer is relied upon to provide all security.
@@ -1278,16 +1389,15 @@ The CES also requires secret scanning in CI.
 
 External integrations may fail independently.
 
-The architecture therefore follows:
+The architecture follows a strict circuit-breaking and error classification pattern:
 
-``` text
-External Service Failure
-        ↓
-Integration Adapter reports failure
-        ↓
-Application decides business outcome
-        ↓
-No false success
+```mermaid
+flowchart TD
+    Failure["External Service Interruption / Timeout\n(SIS, Calendar, Object Storage, SMS)"] --> Adapter["Integration Adapter Captures Exception"]
+    Adapter --> Classify{"Transient or Terminal?"}
+    Classify -- "Transient" --> Retry["Safe Idempotent Retry (Exponential Backoff via BullMQ)"]
+    Classify -- "Terminal / Unrecoverable" --> Circuit["Graceful Degradation\n(Explicit Error Outcome, Zero False Success)"]
+    Circuit --> Audit["Log Structured Incident & Notify Operator"]
 ```
 
 ------------------------------------------------------------------------
@@ -1313,15 +1423,10 @@ memory.
 
 If calendar synchronization fails:
 
-``` text
-No false "synchronized" state
-        ↓
-Failure recorded
-        ↓
-User receives clear outcome
-        ↓
-Safe retry remains possible where supported
-```
+-   No false "synchronized" state is assumed or reported.
+-   The failure reason is durably recorded on the session entity.
+-   The user receives a clear outcome with action guidance.
+-   Safe retry remains possible through the scheduling integration adapter.
 
 ------------------------------------------------------------------------
 
@@ -1343,10 +1448,8 @@ If the database is unavailable:
 
 The architecture must support the CES baseline of:
 
-``` text
-2,000 sustained concurrent users
-5,000 peak concurrent users
-```
+-   2,000 sustained concurrent users
+-   5,000 peak concurrent users
 
 ------------------------------------------------------------------------
 
@@ -1370,21 +1473,20 @@ In-process memory shall not be treated as authoritative shared state.
 Background workers shall scale independently from request-serving
 instances.
 
-This prevents:
+```mermaid
+flowchart LR
+    subgraph InboundTraffic ["User Traffic"]
+        Req1["Interactive Student & Mentor Requests\n(Matching, Profiles, Session Booking)"]
+        Req2["Heavy Batch Operations\n(Bulk Expiry, Analytics Reports, Mass Nudges)"]
+    end
 
-``` text
-large report
-      ↓
-worker busy
-      ↓
-student requests blocked
-```
+    subgraph ComputeSeparation ["Compute Isolation"]
+        WebTier["Next.js Web / API Instances\n(Optimized for Low Latency: Read <400ms, Write <800ms)"]
+        WorkerTier["BullMQ Worker Fleet\n(Separately Autoscaled: Long-Running Jobs)"]
+    end
 
-Instead:
-
-``` text
-Student request → Web instance
-Large report    → Worker
+    Req1 --> WebTier
+    Req2 -->|"Asynchronous Job Enqueue"| WorkerTier
 ```
 
 ------------------------------------------------------------------------
@@ -1393,8 +1495,8 @@ Large report    → Worker
 
 The architecture targets:
 
--   read API p95 \< 400 ms;
--   write API p95 \< 800 ms.
+-   read API p95 < 400 ms;
+-   write API p95 < 800 ms.
 
 Long-running operations such as heavy reports shall move to background
 processing.
@@ -1418,16 +1520,13 @@ discovery workload.
 
 ## 21.1 Environments
 
-The project shall maintain:
+The project maintains an automated promotion pipeline:
 
-``` text
-Local
-  ↓
-CI
-  ↓
-Staging
-  ↓
-Production
+```mermaid
+flowchart LR
+    Dev["Local Dev\n(Docker Compose)"] -->|"git push"| CI["GitHub Actions CI\n(Lint, Typecheck, Test, Audit)"]
+    CI -->|"Automated Deploy"| Staging["Staging Environment\n(Integration Tests & Demo)"]
+    Staging -->|"Manual Approval"| Prod["Production Cloud\n(Multi-AZ Replica Set & Autoscaling)"]
 ```
 
 Staging shall be used for milestone demonstrations and integration
@@ -1437,35 +1536,58 @@ validation.
 
 ## 21.2 Production Logical Topology
 
-``` text
-                  Users
-                    │
-                    ▼
-               Edge / CDN
-                    │
-                    ▼
-          Next.js Web/API Runtime
-          App Router + Route Handlers
-          Server Actions + UI
-                    │
-          ┌─────────┼─────────┐
-          ▼         ▼         ▼
-      MongoDB     Redis    External
-       Atlas                 Adapters
-                    │
-                    ▼
-              BullMQ Queues
-                    │
-                    ▼
-              Worker Runtime
+```mermaid
+flowchart TB
+    Users["Platform Users\n(Students, Mentors, Staff, Admins)"] -->|"HTTPS / WSS"| Edge["Edge CDN / WAF / SSL Termination"]
 
-        Optional when M9 messaging is enabled:
-                    │
-                    ▼
-          Socket.IO Realtime Runtime
-                    │
-                    ▼
-              Redis coordination
+    subgraph CloudVPC ["Production Cloud Environment"]
+        LB["Load Balancer / Ingress Controller"]
+        Edge --> LB
+
+        subgraph WebFleet ["Next.js Application Runtime Fleet"]
+            Web1["Next.js Node Instance 1"]
+            Web2["Next.js Node Instance 2"]
+            WebN["Next.js Node Instance N\n(Auto-Scaled)"]
+        end
+
+        LB --> WebFleet
+
+        subgraph WorkerFleet ["Dedicated BullMQ Worker Fleet"]
+            W1["Worker 1 (Expiry & Notifications)"]
+            W2["Worker 2 (Reports & Analytics)"]
+        end
+
+        subgraph RealtimeGateway ["Optional Realtime Runtime (M9)"]
+            RT["Socket.IO Node Cluster"]
+        end
+        LB -.->|"WebSocket"| RT
+
+        subgraph ManagedData ["Managed Persistence Layer"]
+            MongoCluster[("MongoDB Atlas Replica Set\n(Primary + Secondaries)")]
+            RedisCluster[("Managed Redis Cluster\n(Queues, Limits, Pub/Sub)")]
+        end
+
+        WebFleet --> MongoCluster
+        WebFleet --> RedisCluster
+        RedisCluster --> WorkerFleet
+        WorkerFleet --> MongoCluster
+        RT <--> RedisCluster
+        RT --> MongoCluster
+    end
+
+    subgraph ExtIntegrations ["Third-Party Integration Services"]
+        ExtSSO["University SSO (OIDC)"]
+        ExtSIS["University SIS"]
+        ExtCal["Google / Outlook Calendars"]
+        ExtEmail["SendGrid / Twilio"]
+        ExtS3["Object Storage"]
+    end
+
+    WebFleet & WorkerFleet --> ExtSSO
+    WebFleet & WorkerFleet --> ExtSIS
+    WebFleet & WorkerFleet --> ExtCal
+    WebFleet & WorkerFleet --> ExtEmail
+    WebFleet & WorkerFleet --> ExtS3
 ```
 
 ------------------------------------------------------------------------
@@ -1723,72 +1845,76 @@ any cached effective policy.
 
 # Architecture Summary
 
-The resulting architecture is:
+The resulting architecture brings together the Next.js full-stack modular monolith, MongoDB persistence, Redis caching/rate limiting, BullMQ background processing, and strict privacy/capacity enforcement:
 
-``` text
-Track J
-   ↓
-Path J1 — Next.js Full-Stack
-   ↓
-Next.js App Router
-├── Server Components
-├── Client Components
-├── Route Handlers
-└── Server Actions
-   ↓
-Node.js runtime
-   ↓
-MongoDB + Mongoose
-```
+```mermaid
+flowchart TB
+    subgraph Users ["Platform Users & Actors"]
+        Student["Student"]
+        Mentor["Alumni Mentor"]
+        Staff["ARO / Placement Officer / Admin"]
+    end
 
-``` text
-                         ┌───────────────────────┐
-                         │       USERS           │
-                         │ Student / Mentor /    │
-                         │ Institutional Roles   │
-                         └───────────┬───────────┘
-                                     │
-                                     ▼
-                         ┌───────────────────────┐
-                         │ Next.js App Router    │
-                         │ Server Components     │
-                         │ Client Components     │
-                         │ Route Handlers        │
-                         │ Server Actions        │
-                         └───────────┬───────────┘
-                                     │
-                                     ▼
-                    ┌────────────────────────────────┐
-                    │       MODULAR MONOLITH         │
-                    │                                │
-                    │ M1 Verification & Profile      │
-                    │ M2 Capacity & Availability     │
-                    │ M3 Student Career Profile      │
-                    │ M4 Matching                    │
-                    │ M5 Requests                    │
-                    │ M6 Scheduling & Sessions       │
-                    │ M7 Goals & Feedback            │
-                    │ M8 Engagement                  │
-                    │ M9 Messaging                   │
-                    │ M10 Analytics                  │
-                    └──────────────┬─────────────────┘
-                                   │
-                ┌──────────────────┼──────────────────┐
-                │                  │                  │
-                ▼                  ▼                  ▼
-           MongoDB              Redis             External
-        Source of Truth      Cache / Limits       Adapters
-                │                  │                  │
-                │                  ▼                  ├── SSO
-                │              BullMQ                 ├── Alumni Records
-                │                  │                  ├── Calendars
-                │                  ▼                  ├── Video
-                │              Workers                ├── Email/SMS
-                │                                     ├── LinkedIn
-                │                                     └── Object Storage
-                │
-                ▼
-        Durable application state
+    subgraph AppBoundary ["Next.js Full-Stack Platform (Track J — Path J1)"]
+        UI["App Router UI Layer\n(Server & Client Components)"]
+        Endpoints["Application Entrypoints\n(Route Handlers & Server Actions)"]
+
+        subgraph CrossCutting ["Cross-Cutting Infrastructure Guards"]
+            AuthGuard["Authentication & Session Guard"]
+            RateLimit["Redis Rate Limiter & Throttler"]
+            PrivacyFilter["Centralized Privacy Filter (PRV-01)"]
+            OutboxDispatcher["Durable Outbox Dispatcher"]
+        end
+
+        subgraph CoreMonolith ["Modular Monolith Application Core"]
+            M1["M1: Verification & Profile"]
+            M2["M2: Capacity & Availability"]
+            M3["M3: Student Career Profile"]
+            M4["M4: Matching Engine"]
+            M5["M5: Mentorship Requests"]
+            M6["M6: Scheduling & Sessions"]
+            M7["M7: Goals & Feedback"]
+            M8["M8: Engagement Assessment"]
+            M9["M9: Realtime Messaging (Optional)"]
+            M10["M10: Programme Analytics"]
+        end
+    end
+
+    subgraph PersistenceAsync ["Persistence, Caching & Background Tier"]
+        MongoDB[("MongoDB 7+ Replica Set\n(Primary Authoritative Store)")]
+        Redis[("Redis 7+\n(Cache / Limits / Pub/Sub)")]
+        BullMQ["BullMQ Distributed Queues"]
+        Workers["Dedicated Background Workers"]
+    end
+
+    subgraph ExternalServices ["External Systems via Adapters"]
+        SSO["University SSO (OIDC)"]
+        SIS["Institutional Records (SIS/ERP)"]
+        Cal["Google & Outlook Calendars"]
+        Video["Video Conferencing APIs"]
+        Mail["Email & SMS Gateways"]
+        S3["Object Storage (Degree Proofs)"]
+    end
+
+    Users --> UI
+    UI --> Endpoints
+    Endpoints --> RateLimit --> AuthGuard --> CoreMonolith
+    CoreMonolith --> PrivacyFilter --> Endpoints
+
+    SSO --> AuthGuard
+    CoreMonolith -->|"Mongoose Scoped Models"| MongoDB
+    CoreMonolith -->|"Outbox Events (Transactional)"| MongoDB
+    OutboxDispatcher -->|"Poll Pending"| MongoDB
+    OutboxDispatcher -->|"Enqueue"| BullMQ
+    BullMQ --> Redis
+    BullMQ --> Workers
+    Workers -->|"Update Domain Records"| MongoDB
+    Workers -->|"Send Alerts"| Mail
+
+    CoreMonolith --> SIS
+    CoreMonolith --> Cal
+    CoreMonolith --> Video
+    CoreMonolith --> S3
 ```
 
 This architecture keeps P11 as a **single logical modular product**,
