@@ -21,6 +21,7 @@ const AlumnusSchema = new Schema<IAlumnus>(
     mentoringInterests: [{ type: String, trim: true }],
     displayName: { type: String, required: true, trim: true },
     name: { type: String, trim: true },
+    avatarUrl: { type: String, trim: true },
     professionalHeadline: { type: String, trim: true },
     currentRole: { type: String, trim: true },
     currentTitle: { type: String, trim: true },

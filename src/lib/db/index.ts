@@ -95,7 +95,19 @@ export {
 } from './models';
 
 // Utilities
-export { withTransaction, withSession, paginate, tenantFilter } from './utils';
+export {
+  withTransaction,
+  withSession,
+  paginate,
+  tenantFilter,
+  getCloudinaryConfig,
+  buildCloudinaryAssetFolder,
+  parseCloudinaryUrl,
+  buildCloudinaryImageUrl,
+  buildCloudinaryVideoUrl,
+  buildCloudinaryVideoThumbnail,
+  generateCloudinaryUploadSignature,
+} from './utils';
 
 // Types (re-export for convenience)
 export type {

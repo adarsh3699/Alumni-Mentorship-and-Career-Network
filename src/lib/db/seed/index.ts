@@ -181,6 +181,10 @@ export async function seedDatabase(options: { clean?: boolean } = {}) {
       { upsert: true, new: true }
     );
 
+    const avatarPublicId = `p11/lpu/avatars/alumni/${user._id}`;
+    const avatarUrl = `https://res.cloudinary.com/p11-alumni/image/upload/c_fill,w_512,h_512,g_face,f_auto,q_auto/${avatarPublicId}.jpg`;
+    const isVerified = input.verificationStatus === 'verified';
+
     // Upsert Alumnus Profile
     const alumnus = await Alumnus.findOneAndUpdate(
       { institutionId, email: input.email },
@@ -189,6 +193,7 @@ export async function seedDatabase(options: { clean?: boolean } = {}) {
           institutionId,
           userId: user._id,
           name: input.name,
+          avatarUrl: isVerified ? avatarUrl : undefined,
           email: input.email,
           phone: input.phone,
           graduationYear: input.graduationYear,
@@ -202,11 +207,15 @@ export async function seedDatabase(options: { clean?: boolean } = {}) {
           bio: input.bio,
           expertise: input.expertise,
           verificationStatus: input.verificationStatus,
-          verifiedAt: input.verificationStatus === 'verified' ? new Date('2024-01-15') : undefined,
+          verifiedAt: isVerified ? new Date('2024-01-15') : undefined,
         },
       },
       { upsert: true, new: true }
     );
+
+    if (isVerified) {
+      await User.updateOne({ _id: user._id }, { $set: { avatarUrl } });
+    }
 
     // Mentor Capacity
     await MentorCapacity.findOneAndUpdate(
@@ -244,7 +253,7 @@ export async function seedDatabase(options: { clean?: boolean } = {}) {
         { upsert: true }
       );
 
-      // Media Asset: Avatar
+      // Media Asset: Avatar (Stored on Cloudinary, URL in MongoDB)
       await UserMediaAsset.findOneAndUpdate(
         { institutionId, userId: user._id, assetType: MediaAssetType.PROFILE_PICTURE },
         {
@@ -252,8 +261,15 @@ export async function seedDatabase(options: { clean?: boolean } = {}) {
             institutionId,
             userId: user._id,
             assetType: MediaAssetType.PROFILE_PICTURE,
+            url: avatarUrl,
+            secureUrl: avatarUrl,
+            publicId: avatarPublicId,
+            format: 'jpg',
+            resourceType: 'image',
+            folder: 'p11/lpu/avatars/alumni',
+            thumbnailUrl: `https://res.cloudinary.com/p11-alumni/image/upload/c_thumb,w_150,h_150,g_face,f_auto,q_auto/${avatarPublicId}.jpg`,
             objectKey: `avatars/${institution.code.toLowerCase()}/${user._id}.jpg`,
-            cdnUrl: `https://cdn.lpu.in/avatars/${user._id}.jpg`,
+            cdnUrl: avatarUrl,
             fileName: `${input.name.toLowerCase().replace(/\s+/g, '_')}_avatar.jpg`,
             declaredContentType: 'image/jpeg',
             detectedContentType: 'image/jpeg',
@@ -261,8 +277,22 @@ export async function seedDatabase(options: { clean?: boolean } = {}) {
             status: MediaAssetStatus.ACTIVE,
             dimensions: { width: 512, height: 512 },
             variants: [
-              { size: 'thumb', objectKey: `avatars/${user._id}_64.jpg`, width: 64, height: 64 },
-              { size: 'medium', objectKey: `avatars/${user._id}_256.jpg`, width: 256, height: 256 },
+              {
+                size: 'thumb',
+                url: `https://res.cloudinary.com/p11-alumni/image/upload/c_thumb,w_64,h_64,g_face,f_auto,q_auto/${avatarPublicId}.jpg`,
+                publicId: avatarPublicId,
+                objectKey: `avatars/${user._id}_64.jpg`,
+                width: 64,
+                height: 64,
+              },
+              {
+                size: 'medium',
+                url: `https://res.cloudinary.com/p11-alumni/image/upload/c_fill,w_256,h_256,g_face,f_auto,q_auto/${avatarPublicId}.jpg`,
+                publicId: avatarPublicId,
+                objectKey: `avatars/${user._id}_256.jpg`,
+                width: 256,
+                height: 256,
+              },
             ],
             uploadedAt: new Date(),
             processedAt: new Date(),
@@ -288,12 +318,18 @@ export async function seedDatabase(options: { clean?: boolean } = {}) {
         { upsert: true, new: true }
       );
 
+      const docPublicId = `p11/lpu/verification/${verRequest._id}/degree_proof`;
+      const docUrl = `https://res.cloudinary.com/p11-alumni/image/upload/${docPublicId}.pdf`;
+
       await VerificationDocument.findOneAndUpdate(
         { institutionId, verificationRequestId: verRequest._id },
         {
           $setOnInsert: {
             institutionId,
             verificationRequestId: verRequest._id,
+            url: docUrl,
+            secureUrl: docUrl,
+            publicId: docPublicId,
             objectKey: `verification-evidence/${verRequest._id}/degree_proof.pdf`,
             fileName: 'official_degree_copy.pdf',
             declaredContentType: 'application/pdf',
@@ -332,12 +368,26 @@ export async function seedDatabase(options: { clean?: boolean } = {}) {
       { upsert: true, new: true }
     );
 
+    const studentAvatarPublicId = `p11/lpu/avatars/students/${user._id}`;
+    const studentAvatarUrl = `https://res.cloudinary.com/p11-alumni/image/upload/c_fill,w_512,h_512,g_face,f_auto,q_auto/${studentAvatarPublicId}.jpg`;
+    const studentVideoPublicId = `p11/lpu/video-cvs/${user._id}/pitch`;
+    const studentVideoUrl = `https://res.cloudinary.com/p11-alumni/video/upload/q_auto,f_auto/${studentVideoPublicId}.mp4`;
+    const studentVideoThumb = `https://res.cloudinary.com/p11-alumni/video/upload/so_0,c_fill,w_640,h_360,q_auto,f_auto/${studentVideoPublicId}.jpg`;
+    const studentVideoHls = `https://res.cloudinary.com/p11-alumni/video/upload/sp_auto/${studentVideoPublicId}.m3u8`;
+    const studentResumePublicId = `p11/lpu/resumes/${user._id}/resume_2025`;
+    const studentResumeUrl = `https://res.cloudinary.com/p11-alumni/image/upload/fl_attachment/${studentResumePublicId}.pdf`;
+
+    await User.updateOne({ _id: user._id }, { $set: { avatarUrl: studentAvatarUrl } });
+
     const profile = await StudentProfile.findOneAndUpdate(
       { institutionId, userId: user._id },
       {
         $set: {
           institutionId,
           userId: user._id,
+          avatarUrl: studentAvatarUrl,
+          videoCvUrl: studentVideoUrl,
+          resumeUrl: studentResumeUrl,
           graduationYear: studentInput.gradYear,
           major: studentInput.major,
           degree: studentInput.degree,
@@ -366,7 +416,7 @@ export async function seedDatabase(options: { clean?: boolean } = {}) {
       );
     }
 
-    // Student Media: Avatar & Career Asset (Resume + Video CV)
+    // Student Media: Avatar & Career Asset (Resume + Video CV on Cloudinary)
     await UserMediaAsset.findOneAndUpdate(
       { institutionId, userId: user._id, assetType: MediaAssetType.PROFILE_PICTURE },
       {
@@ -374,8 +424,15 @@ export async function seedDatabase(options: { clean?: boolean } = {}) {
           institutionId,
           userId: user._id,
           assetType: MediaAssetType.PROFILE_PICTURE,
+          url: studentAvatarUrl,
+          secureUrl: studentAvatarUrl,
+          publicId: studentAvatarPublicId,
+          format: 'jpg',
+          resourceType: 'image',
+          folder: 'p11/lpu/avatars/students',
+          thumbnailUrl: `https://res.cloudinary.com/p11-alumni/image/upload/c_thumb,w_150,h_150,g_face,f_auto,q_auto/${studentAvatarPublicId}.jpg`,
           objectKey: `avatars/students/${user._id}.jpg`,
-          cdnUrl: `https://cdn.lpu.in/students/${user._id}.jpg`,
+          cdnUrl: studentAvatarUrl,
           fileName: `${studentInput.name.toLowerCase().replace(/\s+/g, '_')}.jpg`,
           declaredContentType: 'image/jpeg',
           detectedContentType: 'image/jpeg',
@@ -387,7 +444,7 @@ export async function seedDatabase(options: { clean?: boolean } = {}) {
       { upsert: true }
     );
 
-    // Career Asset: Video CV (Prompt 1 requirement)
+    // Career Asset: Video CV (Cloudinary Video with dynamic thumbnail & HLS)
     await CareerAsset.findOneAndUpdate(
       { institutionId, userId: user._id, assetType: CareerAssetType.VIDEO_CV },
       {
@@ -395,6 +452,12 @@ export async function seedDatabase(options: { clean?: boolean } = {}) {
           institutionId,
           userId: user._id,
           assetType: CareerAssetType.VIDEO_CV,
+          url: studentVideoUrl,
+          secureUrl: studentVideoUrl,
+          publicId: studentVideoPublicId,
+          format: 'mp4',
+          resourceType: 'video',
+          folder: `p11/lpu/video-cvs/${user._id}`,
           objectKey: `video-cvs/${user._id}/pitch.mp4`,
           fileName: `${studentInput.name.toLowerCase().replace(/\s+/g, '_')}_video_pitch.mp4`,
           declaredContentType: 'video/mp4',
@@ -406,8 +469,12 @@ export async function seedDatabase(options: { clean?: boolean } = {}) {
           videoMeta: {
             duration: 90,
             resolution: '1080p',
+            thumbnailUrl: studentVideoThumb,
+            playbackUrl: studentVideoHls,
             thumbnailKey: `video-cvs/${user._id}/thumb.jpg`,
             transcodedKey: `video-cvs/${user._id}/hls/manifest.m3u8`,
+            width: 1920,
+            height: 1080,
           },
           uploadedAt: new Date(),
           processedAt: new Date(),
@@ -416,7 +483,7 @@ export async function seedDatabase(options: { clean?: boolean } = {}) {
       { upsert: true }
     );
 
-    // Career Asset: Resume PDF
+    // Career Asset: Resume PDF (Cloudinary Raw/Image asset)
     await CareerAsset.findOneAndUpdate(
       { institutionId, userId: user._id, assetType: CareerAssetType.RESUME },
       {
@@ -424,6 +491,12 @@ export async function seedDatabase(options: { clean?: boolean } = {}) {
           institutionId,
           userId: user._id,
           assetType: CareerAssetType.RESUME,
+          url: studentResumeUrl,
+          secureUrl: studentResumeUrl,
+          publicId: studentResumePublicId,
+          format: 'pdf',
+          resourceType: 'raw',
+          folder: `p11/lpu/resumes/${user._id}`,
           objectKey: `resumes/${user._id}/resume_2025.pdf`,
           fileName: `${studentInput.name.toLowerCase().replace(/\s+/g, '_')}_Resume.pdf`,
           declaredContentType: 'application/pdf',
@@ -507,7 +580,7 @@ export async function seedDatabase(options: { clean?: boolean } = {}) {
   const pastStart = new Date('2025-02-10T14:00:00Z');
   const pastEnd = new Date('2025-02-10T15:00:00Z');
 
-  const pastSession = await Session.findOneAndUpdate(
+  await Session.findOneAndUpdate(
     { institutionId, mentorshipId: mentorship1._id, startAt: pastStart },
     {
       $setOnInsert: {
@@ -554,14 +627,13 @@ export async function seedDatabase(options: { clean?: boolean } = {}) {
 
   // Feedback for past session
   await Feedback.findOneAndUpdate(
-    { institutionId, mentorshipId: mentorship1._id, sessionId: pastSession._id },
+    { institutionId, mentorshipId: mentorship1._id, submittedBy: aaravStudent.user._id },
     {
       $setOnInsert: {
         institutionId,
         mentorshipId: mentorship1._id,
-        sessionId: pastSession._id,
-        authorUserId: aaravStudent.user._id,
-        authorRole: 'student',
+        submittedBy: aaravStudent.user._id,
+        submittedByRole: UserRole.STUDENT,
         rating: 5,
         comments: 'Amanpreet Sir gave concrete advice on how to structure raft log compaction and what Google interviews look for in Distributed Systems. Highly motivating!',
         submittedAt: new Date('2025-02-11T10:00:00Z'),

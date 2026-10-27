@@ -55,6 +55,17 @@ class UserRepositoryClass extends BaseRepository<IUser> {
 
     return { user, created: true };
   }
+
+  /**
+   * Update user avatar URL directly in MongoDB.
+   */
+  async updateAvatar(
+    institutionId: Types.ObjectId,
+    userId: Types.ObjectId,
+    avatarUrl: string
+  ): Promise<IUser | null> {
+    return this.updateById(institutionId, userId, { $set: { avatarUrl } });
+  }
 }
 
 /** Singleton instance */

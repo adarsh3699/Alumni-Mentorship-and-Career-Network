@@ -9,6 +9,9 @@ const StudentProfileSchema = new Schema<IStudentProfile>(
   {
     institutionId: { type: Schema.Types.ObjectId, required: true, ref: 'Institution', index: true },
     userId: { type: Schema.Types.ObjectId, required: true, ref: 'User' },
+    avatarUrl: { type: String, trim: true },
+    videoCvUrl: { type: String, trim: true },
+    resumeUrl: { type: String, trim: true },
     interests: [{ type: String, trim: true }],
     targetRoles: [{ type: String, trim: true }],
     targetIndustries: [{ type: String, trim: true }],

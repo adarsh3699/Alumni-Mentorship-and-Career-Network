@@ -110,6 +110,43 @@ class AlumnusRepositoryClass extends BaseRepository<IAlumnus> {
       options
     );
   }
+
+  /**
+   * Update alumnus profile avatar URL directly in MongoDB.
+   */
+  async updateAvatar(
+    institutionId: Types.ObjectId,
+    alumnusId: Types.ObjectId,
+    avatarUrl: string,
+    session?: ClientSession
+  ): Promise<IAlumnus | null> {
+    return this.updateById(
+      institutionId,
+      alumnusId,
+      { $set: { avatarUrl } },
+      session
+    );
+  }
+
+  /**
+   * Update alumnus profile avatar URL by userId.
+   */
+  async updateAvatarByUserId(
+    institutionId: Types.ObjectId,
+    userId: Types.ObjectId,
+    avatarUrl: string,
+    session?: ClientSession
+  ): Promise<IAlumnus | null> {
+    const doc = await this.model
+      .findOneAndUpdate(
+        { institutionId, userId },
+        { $set: { avatarUrl } },
+        { new: true, session }
+      )
+      .lean<IAlumnus>()
+      .exec();
+    return doc;
+  }
 }
 
 /** Singleton instance */

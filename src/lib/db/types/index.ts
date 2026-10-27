@@ -84,6 +84,7 @@ export interface IUser extends BaseDocument {
   externalIdentityId: string;
   role: UserRole;
   status: UserStatus;
+  avatarUrl?: string;
 }
 
 // ── M1: Alumni Verification & Profile ──────────────────────────────────
@@ -95,6 +96,7 @@ export interface IAlumnus extends BaseDocument {
   mentoringInterests: string[];
   displayName: string;
   name?: string;
+  avatarUrl?: string;
   professionalHeadline?: string;
   currentRole?: string;
   currentTitle?: string;
@@ -128,7 +130,10 @@ export interface IVerificationRequest extends BaseDocument {
 
 export interface IVerificationDocument extends BaseDocument {
   verificationRequestId: Types.ObjectId;
-  objectKey: string;
+  url?: string;
+  secureUrl?: string;
+  publicId?: string;
+  objectKey?: string;
   fileName: string;
   declaredContentType: string;
   detectedContentType?: string;
@@ -167,6 +172,9 @@ export interface IAvailabilityWindow extends BaseDocument {
 
 export interface IStudentProfile extends BaseDocument {
   userId: Types.ObjectId;
+  avatarUrl?: string;
+  videoCvUrl?: string;
+  resumeUrl?: string;
   interests: string[];
   targetRoles: string[];
   targetIndustries: string[];
@@ -335,7 +343,10 @@ export interface IOutboxEvent extends BaseDocument {
 
 export interface ImageVariant {
   size: string;
-  objectKey: string;
+  url: string;
+  secureUrl?: string;
+  publicId?: string;
+  objectKey?: string;
   width: number;
   height: number;
 }
@@ -343,7 +354,14 @@ export interface ImageVariant {
 export interface IUserMediaAsset extends BaseDocument {
   userId: Types.ObjectId;
   assetType: MediaAssetType;
-  objectKey: string;
+  url: string;
+  secureUrl?: string;
+  publicId: string;
+  format?: string;
+  resourceType?: string;
+  folder?: string;
+  thumbnailUrl?: string;
+  objectKey?: string;
   cdnUrl?: string;
   fileName: string;
   declaredContentType: string;
@@ -359,14 +377,24 @@ export interface IUserMediaAsset extends BaseDocument {
 export interface VideoMeta {
   duration: number;
   resolution: string;
+  thumbnailUrl?: string;
+  playbackUrl?: string;
   thumbnailKey?: string;
   transcodedKey?: string;
+  width?: number;
+  height?: number;
 }
 
 export interface ICareerAsset extends BaseDocument {
   userId: Types.ObjectId;
   assetType: CareerAssetType;
-  objectKey: string;
+  url: string;
+  secureUrl?: string;
+  publicId: string;
+  format?: string;
+  resourceType?: string;
+  folder?: string;
+  objectKey?: string;
   fileName: string;
   declaredContentType: string;
   detectedContentType?: string;

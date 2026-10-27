@@ -1,2 +1,10 @@
-export { UserMediaAssetRepository } from './user-media-asset.repository';
-export { CareerAssetRepository } from './career-asset.repository';
+export {
+  UserMediaAssetRepository,
+  type SaveCloudinaryAssetInput,
+} from './user-media-asset.repository';
+export {
+  CareerAssetRepository,
+  type SaveCloudinaryVideoInput,
+  type SaveCloudinaryResumeInput,
+} from './career-asset.repository';
+

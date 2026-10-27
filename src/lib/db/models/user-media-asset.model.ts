@@ -1,6 +1,7 @@
 /**
  * User Media Asset Model
- * Profile pictures and cover photos. Binaries stored in object storage.
+ * Profile pictures and cover photos. Binaries stored on Cloudinary;
+ * URLs and transformation metadata stored in MongoDB.
  */
 
 import mongoose, { Schema, Model } from 'mongoose';
@@ -10,7 +11,10 @@ import { MediaAssetType, MediaAssetStatus } from '../types/enums';
 const ImageVariantSchema = new Schema(
   {
     size: { type: String, required: true },
-    objectKey: { type: String, required: true },
+    url: { type: String, required: true, trim: true },
+    secureUrl: { type: String, trim: true },
+    publicId: { type: String, trim: true },
+    objectKey: { type: String, trim: true },
     width: { type: Number, required: true },
     height: { type: Number, required: true },
   },
@@ -26,8 +30,15 @@ const UserMediaAssetSchema = new Schema<IUserMediaAsset>(
       required: true,
       enum: Object.values(MediaAssetType),
     },
-    objectKey: { type: String, required: true },
-    cdnUrl: { type: String },
+    url: { type: String, required: true, trim: true },
+    secureUrl: { type: String, trim: true },
+    publicId: { type: String, required: true, trim: true, index: true },
+    format: { type: String, trim: true },
+    resourceType: { type: String, default: 'image' },
+    folder: { type: String, trim: true },
+    thumbnailUrl: { type: String, trim: true },
+    objectKey: { type: String, trim: true },
+    cdnUrl: { type: String, trim: true },
     fileName: { type: String, required: true, trim: true },
     declaredContentType: { type: String, required: true },
     detectedContentType: { type: String },
@@ -51,6 +62,7 @@ const UserMediaAssetSchema = new Schema<IUserMediaAsset>(
 
 // ── Indexes ────────────────────────────────────────────────────────────
 UserMediaAssetSchema.index({ institutionId: 1, userId: 1, assetType: 1, status: 1 });
+UserMediaAssetSchema.index({ publicId: 1 });
 
 export const UserMediaAsset: Model<IUserMediaAsset> =
   mongoose.models.UserMediaAsset ||

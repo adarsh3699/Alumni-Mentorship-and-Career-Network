@@ -22,6 +22,7 @@ const UserSchema = new Schema<IUser>(
       enum: Object.values(UserStatus),
       default: UserStatus.ACTIVE,
     },
+    avatarUrl: { type: String, trim: true },
   },
   { timestamps: true }
 );

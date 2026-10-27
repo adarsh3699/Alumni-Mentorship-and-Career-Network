@@ -1,6 +1,7 @@
 /**
  * Career Asset Model
- * Video CVs, resumes, portfolio items. Binaries stored in object storage.
+ * Video CVs, resumes, portfolio items. Binaries stored on Cloudinary;
+ * URLs, streaming metadata, and thumbnails stored in MongoDB.
  */
 
 import mongoose, { Schema, Model } from 'mongoose';
@@ -11,8 +12,12 @@ const VideoMetaSchema = new Schema(
   {
     duration: { type: Number, required: true },
     resolution: { type: String, required: true },
-    thumbnailKey: { type: String },
-    transcodedKey: { type: String },
+    thumbnailUrl: { type: String, trim: true },
+    playbackUrl: { type: String, trim: true },
+    thumbnailKey: { type: String, trim: true },
+    transcodedKey: { type: String, trim: true },
+    width: { type: Number },
+    height: { type: Number },
   },
   { _id: false }
 );
@@ -26,7 +31,13 @@ const CareerAssetSchema = new Schema<ICareerAsset>(
       required: true,
       enum: Object.values(CareerAssetType),
     },
-    objectKey: { type: String, required: true },
+    url: { type: String, required: true, trim: true },
+    secureUrl: { type: String, trim: true },
+    publicId: { type: String, required: true, trim: true, index: true },
+    format: { type: String, trim: true },
+    resourceType: { type: String, default: 'video' },
+    folder: { type: String, trim: true },
+    objectKey: { type: String, trim: true },
     fileName: { type: String, required: true, trim: true },
     declaredContentType: { type: String, required: true },
     detectedContentType: { type: String },
@@ -49,6 +60,7 @@ const CareerAssetSchema = new Schema<ICareerAsset>(
 
 // ── Indexes ────────────────────────────────────────────────────────────
 CareerAssetSchema.index({ institutionId: 1, userId: 1, assetType: 1, status: 1 });
+CareerAssetSchema.index({ publicId: 1 });
 CareerAssetSchema.index({ institutionId: 1, assetType: 1, createdAt: -1 });
 
 export const CareerAsset: Model<ICareerAsset> =

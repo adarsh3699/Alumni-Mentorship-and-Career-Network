@@ -37,6 +37,34 @@ class StudentProfileRepositoryClass extends BaseRepository<IStudentProfile> {
       .exec();
     return result!;
   }
+
+  /**
+   * Update student media URLs (avatar, video CV, resume) directly in MongoDB.
+   */
+  async updateMediaUrls(
+    institutionId: Types.ObjectId,
+    userId: Types.ObjectId,
+    urls: {
+      avatarUrl?: string;
+      videoCvUrl?: string;
+      resumeUrl?: string;
+    }
+  ): Promise<IStudentProfile | null> {
+    const updateSet: Record<string, string> = {};
+    if (urls.avatarUrl) updateSet.avatarUrl = urls.avatarUrl;
+    if (urls.videoCvUrl) updateSet.videoCvUrl = urls.videoCvUrl;
+    if (urls.resumeUrl) updateSet.resumeUrl = urls.resumeUrl;
+
+    const result = await this.model
+      .findOneAndUpdate(
+        { institutionId, userId },
+        { $set: updateSet },
+        { new: true }
+      )
+      .lean<IStudentProfile>()
+      .exec();
+    return result;
+  }
 }
 
 /** Singleton instance */

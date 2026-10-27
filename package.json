@@ -11,6 +11,7 @@
     "match:test": "tsx scripts/test-match-engine.ts"
   },
   "dependencies": {
+    "cloudinary": "^2.11.0",
     "mongoose": "^9.10.4",
     "next": "16.3.4",
     "react": "19.2.8",
@@ -24,6 +25,7 @@
     "@types/react-dom": "^19",
     "eslint": "^10",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "typescript-eslint": "^8"
   },

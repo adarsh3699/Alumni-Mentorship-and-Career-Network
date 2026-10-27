@@ -31,6 +31,12 @@ cp .env.example .env.local
 
 ```env
 MONGODB_URI=mongodb://localhost:27017/p11_alumni_mentorship
+
+# Cloudinary (Images, Video CVs & Documents)
+NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=p11-alumni
+CLOUDINARY_CLOUD_NAME=p11-alumni
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 ```
 
 ### 2. Run Database Seed (Populates 50 Verified Alumni & Demo Data)
@@ -118,7 +124,8 @@ src/lib/db/
 ├── utils/
 │   ├── index.ts
 │   ├── transaction.ts            # Atomic session & transaction runner
-│   └── query-helpers.ts          # Pagination, sort, and tenant scoping
+│   ├── query-helpers.ts          # Pagination, sort, and tenant scoping
+│   └── cloudinary.ts             # Transformations, video thumbnails & signed upload helpers
 │
 └── seed/
     ├── data.ts                   # 50 realistic alumni profiles & demo fixtures
@@ -150,92 +157,160 @@ Mentors have strict concurrent mentee limits (`maxConcurrentMentees`). To preven
 
 ---
 
-## Media & Document Storage Architecture
+## Media & Document Storage Architecture (Cloudinary + MongoDB)
 
-### Why NoSQL + Object Storage?
+### Why Cloudinary + MongoDB URL Storage?
 
-Binary files (PDF verification certificates, profile avatars, high-definition Video CVs) **must never be stored as BSON blobs in MongoDB**. Doing so inflates document sizes, slows down database memory cache (WiredTiger), and risks hitting MongoDB's 16MB document limit.
+Binary assets (high-resolution profile avatars, 90-second Video CVs, PDF resumes, degree verification certificates) **must never be stored as BSON blobs in MongoDB**. Doing so inflates document sizes, exhausts WiredTiger database memory cache, and risks exceeding MongoDB's 16MB document boundary.
 
-Instead, P11 follows the industry-standard **Presigned URL + MongoDB Metadata Pattern**:
+Instead, P11 pairs **Cloudinary** (as the dedicated media processing & CDN cloud) with **MongoDB** (storing secure HTTPS URLs, public IDs, and transformation metadata):
+
+1. **Optimized Media Hosting & CDN**: Images and videos are hosted on Cloudinary's multi-CDN infrastructure with auto-compression (`q_auto`) and modern formats (`f_auto` → WebP/AVIF).
+2. **On-The-Fly Face-Detection Cropping**: Profile avatars automatically detect human faces (`c_thumb,g_face,w_200,h_200`) without manual cropping.
+3. **Automated Video Processing**: 90-second Video CVs benefit from automated thumbnail extraction (`so_0`), streaming optimization (`sp_auto`), and adaptive bitrate delivery (HLS / `.m3u8`).
+4. **Zero-Join Direct Embedding**:
+   - `Alumnus.avatarUrl`: Stored directly on the alumni document so student discovery cards load instantaneously without joining `UserMediaAsset`.
+   - `StudentProfile.avatarUrl`, `videoCvUrl`, `resumeUrl`: Stored directly on student profiles for 0-latency access.
+   - `User.avatarUrl`: Stored directly on User for top-level navigation headers.
+5. **Authoritative Media Ledger**: `UserMediaAsset` and `CareerAsset` collections maintain audit logs, replaced statuses, and multi-resolution variants.
 
 ```
-┌──────────┐             ┌─────────────────────┐             ┌───────────────────┐
-│  Client  │ ── (1) ───> │  API Route Handler  │ ── (2) ───> │ UserMediaAsset /  │
-│ (Browser)│             │  (Presigned URL Gen)│             │ CareerAsset Repo  │
-└──────────┘             └─────────────────────┘             └───────────────────┘
-     │                              │                                  │
-     │ (3) Direct PUT               │ (Issues S3 Presigned URL)        │ (Records status:
-     ▼                              ▼                                  │  PENDING_UPLOAD)
-┌──────────┐                                                           │
-│  AWS S3  │                                                           │
-│    or    │ ── (4) S3 Event / Webhook ──> ┌─────────────────────────┐ │
-│ Cloudflare│                              │ Background Worker /     │ │
-│    R2    │ <─ (5) Confirm Upload ─────── │ confirmUpload() Handler │─┘
-└──────────┘                               └─────────────────────────┘
+┌──────────┐             ┌─────────────────────────┐             ┌───────────────────┐
+│  Client  │ ── (1) ───> │   Next.js API Route     │ ── (2) ───> │  Cloudinary SDK   │
+│ (Browser)│ <── (3) ─── │ (Issues Signed Params)  │             │  (Signature Gen)  │
+└──────────┘             └─────────────────────────┘             └───────────────────┘
+     │
+     │ (4) Direct Upload (POST multipart)
+     ▼
+┌──────────────┐
+│  Cloudinary  │ ── (5) Returns: secure_url, public_id, duration, format
+└──────────────┘
+     │
+     ▼
+┌─────────────────────────┐             ┌────────────────────────────────────────────────────────┐
+│   Next.js API Route /   │ ── (6) ───> │ UserMediaAssetRepository.saveCloudinaryAsset(...) /   │
+│   Server Action         │             │ CareerAssetRepository.saveCloudinaryVideoCV(...)       │
+└─────────────────────────┘             └────────────────────────────────────────────────────────┘
+                                                                    │
+                                                                    ▼ Stores in MongoDB:
+                                                • UserMediaAsset: status: 'active', url, publicId
+                                                • Alumnus: avatarUrl directly embedded
+                                                • StudentProfile: videoCvUrl, resumeUrl embedded
 ```
 
 ### 1. Profile Pictures & Avatars (`UserMediaAssetRepository`)
 
+When a user uploads a new profile photo via Cloudinary, save the asset metadata and synchronize the URL:
+
 ```ts
 import { UserMediaAssetRepository, MediaAssetType } from '@/lib/db';
 
-// 1. When user initiates upload, record intent in DB:
-const asset = await UserMediaAssetRepository.initiateUpload(institutionId, userId, {
+// 1. After upload completes on Cloudinary, save metadata to MongoDB:
+const mediaAsset = await UserMediaAssetRepository.saveCloudinaryAsset(institutionId, userId, {
   assetType: MediaAssetType.PROFILE_PICTURE,
-  objectKey: `avatars/${userId}/${Date.now()}.jpg`,
-  fileName: 'profile.jpg',
-  declaredContentType: 'image/jpeg',
-  sizeBytes: 154000,
-});
-
-// 2. Client uploads directly to S3/R2 using presigned URL.
-
-// 3. When upload completes, activate the new avatar and archive previous ones:
-await UserMediaAssetRepository.confirmUpload(institutionId, asset._id, {
-  cdnUrl: `https://cdn.lpu.in/${asset.objectKey}`,
-  detectedContentType: 'image/jpeg',
+  url: 'https://res.cloudinary.com/p11-alumni/image/upload/c_fill,w_512,h_512,g_face,q_auto,f_auto/p11/lpu/avatars/alumni/user_123.jpg',
+  secureUrl: 'https://res.cloudinary.com/p11-alumni/image/upload/c_fill,w_512,h_512,g_face,q_auto,f_auto/p11/lpu/avatars/alumni/user_123.jpg',
+  publicId: 'p11/lpu/avatars/alumni/user_123',
+  format: 'jpg',
+  resourceType: 'image',
+  fileName: 'profile_photo.jpg',
+  sizeBytes: 145000,
   dimensions: { width: 512, height: 512 },
+  thumbnailUrl: 'https://res.cloudinary.com/p11-alumni/image/upload/c_thumb,w_150,h_150,g_face,q_auto,f_auto/p11/lpu/avatars/alumni/user_123.jpg',
 });
-await UserMediaAssetRepository.deprecatePreviousAvatars(institutionId, userId, asset._id);
+
+// Behind the scenes, saveCloudinaryAsset automatically:
+// - Sets status: 'active'
+// - Deprecates previous avatars (status: 'replaced')
+// - Updates avatarUrl on User, Alumnus, and StudentProfile documents!
 ```
 
 ### 2. Video CVs & Resumes (`CareerAssetRepository`)
 
-```ts
-import { CareerAssetRepository, CareerAssetType } from '@/lib/db';
+Store Video CVs with duration, streaming URLs, and auto-generated poster frames:
 
-// Register Video CV metadata:
-const videoAsset = await CareerAssetRepository.initiateUpload(institutionId, userId, {
-  assetType: CareerAssetType.VIDEO_CV,
-  objectKey: `video-cvs/${userId}/intro.mp4`,
-  fileName: 'alex_career_pitch.mp4',
-  declaredContentType: 'video/mp4',
-  sizeBytes: 25000000,
-  title: 'Alex Kim — 90s Career Pitch',
+```ts
+import { CareerAssetRepository } from '@/lib/db';
+
+// Register Video CV in MongoDB:
+const videoAsset = await CareerAssetRepository.saveCloudinaryVideoCV(institutionId, userId, {
+  url: 'https://res.cloudinary.com/p11-alumni/video/upload/q_auto,f_auto/p11/lpu/video-cvs/user_456/pitch.mp4',
+  secureUrl: 'https://res.cloudinary.com/p11-alumni/video/upload/q_auto,f_auto/p11/lpu/video-cvs/user_456/pitch.mp4',
+  publicId: 'p11/lpu/video-cvs/user_456/pitch',
+  format: 'mp4',
+  fileName: 'aarav_video_pitch.mp4',
+  sizeBytes: 15400000,
+  title: 'Aarav Gupta — 90-Second Systems Engineering Pitch',
+  description: 'Highlighting Distributed Systems capstone and Raft consensus implementation.',
+  videoMeta: {
+    duration: 90,
+    resolution: '1080p',
+    thumbnailUrl: 'https://res.cloudinary.com/p11-alumni/video/upload/so_0,c_fill,w_640,h_360/p11/lpu/video-cvs/user_456/pitch.jpg',
+    playbackUrl: 'https://res.cloudinary.com/p11-alumni/video/upload/sp_auto/p11/lpu/video-cvs/user_456/pitch.m3u8',
+    width: 1920,
+    height: 1080,
+  },
 });
 
-// After background transcoding completes:
-await CareerAssetRepository.updateVideoTranscoding(institutionId, videoAsset._id, {
-  duration: 90,
-  resolution: '1080p',
-  thumbnailKey: `video-cvs/${userId}/thumb.jpg`,
-  transcodedKey: `video-cvs/${userId}/hls/manifest.m3u8`,
+// StudentProfile.videoCvUrl is automatically updated with the secure video URL!
+```
+
+### 3. Dynamic On-The-Fly Transformations (`buildCloudinaryImageUrl`)
+
+Use built-in transformation helpers to dynamically build responsive image variants or video thumbnails:
+
+```ts
+import {
+  buildCloudinaryImageUrl,
+  buildCloudinaryVideoThumbnail,
+  buildCloudinaryVideoUrl,
+} from '@/lib/db';
+
+// 1. Generate circular avatar with face detection:
+const circleAvatar = buildCloudinaryImageUrl('p11/lpu/avatars/alumni/user_123', {
+  width: 120,
+  height: 120,
+  crop: 'thumb',
+  gravity: 'face',
+  radius: 'max',
+  format: 'auto',
+  quality: 'auto',
+});
+
+// 2. Generate video poster frame capture at second 2:
+const videoPoster = buildCloudinaryVideoThumbnail('p11/lpu/video-cvs/user_456/pitch', {
+  startOffset: 2,
+  width: 640,
+  height: 360,
+  crop: 'fill',
+  format: 'jpg',
+});
+
+// 3. Generate adaptive bitrate streaming video:
+const streamingUrl = buildCloudinaryVideoUrl('p11/lpu/video-cvs/user_456/pitch', {
+  format: 'm3u8',
+  streamingProfile: 'auto',
 });
 ```
 
-### 3. Verification Documents (`VerificationDocumentRepository`)
+### 4. Client-Side Signed Direct Uploads (`generateCloudinaryUploadSignature`)
 
-Verification evidence submitted by alumni (e.g. graduation certificates) is stored in a quarantined S3 bucket until scanned:
+To let client browsers upload directly to Cloudinary without streaming huge files through your Next.js server:
 
 ```ts
-import { VerificationDocumentRepository } from '@/lib/db';
+import { generateCloudinaryUploadSignature } from '@/lib/db';
 
-// After virus scanner finishes:
-await VerificationDocumentRepository.markApproved(
-  institutionId,
-  documentId,
-  'application/pdf'
-);
+// In a Next.js Server Action / API Route:
+export async function getUploadSignature() {
+  const params = {
+    folder: 'p11/lpu/video-cvs',
+    resource_type: 'video',
+  };
+
+  const signed = generateCloudinaryUploadSignature(params);
+  return Response.json(signed);
+  // Returns: { signature, timestamp, apiKey, cloudName }
+}
 ```
 
 ---
@@ -320,12 +395,12 @@ await VerificationDocumentRepository.markApproved(
 | `AuditEntryRepository` | `log()`, `findByTarget()`, `findByActor()` | Append-only privileged action log |
 | `OutboxEventRepository` | `findPendingForDispatch()`, `markDispatched()`, `markFailed()` | Durable outbox event dispatcher |
 
-### Media & Career Assets
+### Media & Career Assets (Cloudinary)
 
 | Repository | Key Methods | Description |
 |---|---|---|
-| `UserMediaAssetRepository` | `findActiveAvatar()`, `initiateUpload()`, `confirmUpload()`, `deprecatePreviousAvatars()` | Profile photos & avatars |
-| `CareerAssetRepository` | `findActiveVideoCV()`, `findActiveResume()`, `initiateUpload()`, `updateVideoTranscoding()` | Video CVs, resumes, portfolio docs |
+| `UserMediaAssetRepository` | `saveCloudinaryAsset()`, `findActiveAvatar()`, `findByPublicId()`, `deprecatePreviousAvatars()` | Cloudinary profile photos, avatars & cover photos |
+| `CareerAssetRepository` | `saveCloudinaryVideoCV()`, `saveCloudinaryResume()`, `findActiveVideoCV()`, `findActiveResume()` | Video CVs (HLS/thumbnails) & Resumes (PDFs) |
 
 ---
 
