@@ -1,5 +1,30 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Backend authentication
+
+The backend auth routes use Better Auth with MongoDB and university OIDC. Copy
+`.env.example` to `.env.local`, fill in the MongoDB, Better Auth, university IdP,
+trusted origin, and Resend values, then run `pnpm dev`. Register this OIDC
+callback URL with the university identity provider:
+
+```text
+{BETTER_AUTH_URL}/api/auth/callback/university
+```
+
+Start university SSO at `GET /api/auth/sign-in/social?provider=university&callbackURL=/`.
+After the SSO callback, exchange its Better Auth session for the application's
+short-lived access and rotating refresh cookies with `POST /api/v1/auth/session`.
+`GET /api/v1/me` returns the current identity and an `X-CSRF-Token`; send that
+value as `X-CSRF-Token` for `POST /api/v1/auth/refresh` and
+`POST /api/v1/auth/logout`, together with the browser's cookies. Email OTP is
+available through Better Auth's `/api/auth/email-otp/*` routes and is delivered
+by Resend. Admin users must enroll TOTP using Better Auth's `/api/auth/two-factor/*`
+routes before exchanging their session for application tokens.
+
+Set user `role` and `institutionId` on the server as part of provisioning; public
+auth input cannot set these fields. `src/lib/authorization.ts` provides the
+server-side role, institution, owner, and relationship authorization helper.
+
 ## Getting Started
 
 First, run the development server:
