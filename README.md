@@ -2,24 +2,21 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Backend authentication
 
-The backend auth routes use Better Auth with MongoDB and university OIDC. Copy
-`.env.example` to `.env.local`, fill in the MongoDB, Better Auth, university IdP,
-trusted origin, and Resend values, then run `pnpm dev`. Register this OIDC
-callback URL with the university identity provider:
+The backend auth routes use email and password with Better Auth and MongoDB.
+Copy `.env.example` to `.env.local`, fill in the MongoDB, Better Auth, trusted
+origin, and Resend values, then run `pnpm dev`.
 
-```text
-{BETTER_AUTH_URL}/api/auth/callback/university
-```
+Register with `POST /api/v1/auth/register` (`name`, `email`, `password`), verify
+the emailed code with `POST /api/v1/auth/verify-email` (`email`, `otp`), then
+sign in with `POST /api/v1/auth/login` (`email`, `password`). Successful login
+sets short-lived access and rotating refresh cookies. Admin login requires TOTP;
+Better Auth's `/api/auth/two-factor/*` routes provide TOTP enrollment and the
+`POST /api/v1/auth/verify-totp` endpoint completes a login challenge.
 
-Start university SSO at `GET /api/auth/sign-in/social?provider=university&callbackURL=/`.
-After the SSO callback, exchange its Better Auth session for the application's
-short-lived access and rotating refresh cookies with `POST /api/v1/auth/session`.
-`GET /api/v1/me` returns the current identity and an `X-CSRF-Token`; send that
-value as `X-CSRF-Token` for `POST /api/v1/auth/refresh` and
-`POST /api/v1/auth/logout`, together with the browser's cookies. Email OTP is
-available through Better Auth's `/api/auth/email-otp/*` routes and is delivered
-by Resend. Admin users must enroll TOTP using Better Auth's `/api/auth/two-factor/*`
-routes before exchanging their session for application tokens.
+For local development, send `Origin: http://localhost:3000` on auth requests.
+Use `Content-Type: application/json` and JSON bodies. After login, keep Postman's
+cookies enabled. Call `GET /api/v1/me` to receive an `X-CSRF-Token`, then include
+it on refresh and logout requests.
 
 Set user `role` and `institutionId` on the server as part of provisioning; public
 auth input cannot set these fields. `src/lib/authorization.ts` provides the

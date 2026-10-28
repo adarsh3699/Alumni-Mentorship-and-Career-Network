@@ -10,10 +10,18 @@ export function csrfToken() {
 
 export function checkRequest(request: Request) {
   if (!mutating.has(request.method)) return true;
+  return checkOrigin(request) && checkCsrf(request);
+}
+
+export function checkOrigin(request: Request) {
   const allowed = new Set((process.env.AUTH_TRUSTED_ORIGINS || "").split(",").filter(Boolean));
   const source = request.headers.get("origin") || request.headers.get("referer");
   if (!source) return false;
   try { if (!allowed.has(new URL(source).origin)) return false; } catch { return false; }
+  return true;
+}
+
+function checkCsrf(request: Request) {
   const cookie = request.headers.get("cookie")?.match(/(?:^|;\s*)csrf_token=([^;]+)/)?.[1];
   const header = request.headers.get("x-csrf-token");
   if (!cookie || !header || cookie.length !== header.length) return false;

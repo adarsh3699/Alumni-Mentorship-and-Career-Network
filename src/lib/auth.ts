@@ -1,6 +1,5 @@
-import { betterAuth, type BetterAuthOptions } from "better-auth";
+import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "@better-auth/mongo-adapter";
-import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import { emailOTP, twoFactor } from "better-auth/plugins";
 import { MongoClient } from "mongodb";
 import { Resend } from "resend";
@@ -23,15 +22,15 @@ const sendEmail = async (input: Parameters<Resend["emails"]["send"]>[0]) => {
   return resend.emails.send(input);
 };
 
-let instance: ReturnType<typeof betterAuth<BetterAuthOptions>> | undefined;
-export function getAuth() {
-  if (!instance) instance = betterAuth<BetterAuthOptions>({
+function createAuth() {
+  return betterAuth({
   appName: "Alumni Mentorship Network",
   baseURL: required("BETTER_AUTH_URL"),
   secret: required("BETTER_AUTH_SECRET"),
   database: mongodbAdapter(db),
   trustedOrigins: (process.env.AUTH_TRUSTED_ORIGINS || "").split(",").filter(Boolean),
-  emailAndPassword: { enabled: false },
+  emailAndPassword: { enabled: true, requireEmailVerification: true },
+  emailVerification: { sendOnSignUp: true },
   user: {
     additionalFields: {
       role: { type: "string", required: false, defaultValue: "student", input: false },
@@ -44,26 +43,13 @@ export function getAuth() {
     defaultCookieAttributes: { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax" },
   },
   plugins: [
-    genericOAuth({ config: [{
-      providerId: "university",
-      name: "University SSO",
-      discoveryUrl: `${required("OIDC_ISSUER_URL").replace(/\/$/, "")}/.well-known/openid-configuration`,
-      requireIdTokenVerification: true,
-      clientId: required("OIDC_CLIENT_ID"),
-      clientSecret: required("OIDC_CLIENT_SECRET"),
-      scopes: ["openid", "profile", "email"],
-      mapProfileToUser: (profile) => ({
-        email: String(profile.email || ""),
-        name: String(profile.name || profile.email || "University user"),
-        image: typeof profile.picture === "string" ? profile.picture : undefined,
-        emailVerified: profile.email_verified === true,
-      }),
-    }] }),
     emailOTP({
       otpLength: 6,
       expiresIn: 300,
       allowedAttempts: 3,
       disableSignUp: true,
+      overrideDefaultEmailVerification: true,
+      sendVerificationOnSignUp: true,
       storeOTP: "hashed",
       rateLimit: { window: 60, max: 3 },
       async sendVerificationOTP({ email, otp, type }) {
@@ -93,5 +79,10 @@ export function getAuth() {
     user: { create: { before: async (user) => ({ data: { ...user, role: process.env.DEFAULT_USER_ROLE || "student" } }) } },
   },
   });
+}
+
+let instance: ReturnType<typeof createAuth> | undefined;
+export function getAuth() {
+  if (!instance) instance = createAuth();
   return instance;
 }
