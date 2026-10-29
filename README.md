@@ -1,5 +1,27 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Backend authentication
+
+The backend auth routes use email and password with Better Auth and MongoDB.
+Copy `.env.example` to `.env.local`, fill in the MongoDB, Better Auth, trusted
+origin, and Resend values, then run `pnpm dev`.
+
+Register with `POST /api/v1/auth/register` (`name`, `email`, `password`), verify
+the emailed code with `POST /api/v1/auth/verify-email` (`email`, `otp`), then
+sign in with `POST /api/v1/auth/login` (`email`, `password`). Successful login
+sets short-lived access and rotating refresh cookies. Admin login requires TOTP;
+Better Auth's `/api/auth/two-factor/*` routes provide TOTP enrollment and the
+`POST /api/v1/auth/verify-totp` endpoint completes a login challenge.
+
+For local development, send `Origin: http://localhost:3000` on auth requests.
+Use `Content-Type: application/json` and JSON bodies. After login, keep Postman's
+cookies enabled. Call `GET /api/v1/me` to receive an `X-CSRF-Token`, then include
+it on refresh and logout requests.
+
+Set user `role` and `institutionId` on the server as part of provisioning; public
+auth input cannot set these fields. `src/lib/authorization.ts` provides the
+server-side role, institution, owner, and relationship authorization helper.
+
 ## Getting Started
 
 First, run the development server:

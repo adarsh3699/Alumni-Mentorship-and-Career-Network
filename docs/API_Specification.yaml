@@ -1427,7 +1427,7 @@ components:
       type: apiKey
       in: cookie
       name: access_token
-      description: Short-lived JWT access token stored in an HTTP-only, Secure cookie. Authentication is established through university SSO/OIDC. Cookie-authenticated state-changing operations also require X-CSRF-Token and SameSite plus Origin/Referer validation.
+      description: Short-lived JWT access token stored in an HTTP-only, Secure cookie. Authentication uses email and password after email OTP verification. Cookie-authenticated state-changing operations also require X-CSRF-Token and SameSite plus Origin/Referer validation.
     refreshToken:
       type: apiKey
       in: cookie

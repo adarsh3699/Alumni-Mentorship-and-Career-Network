@@ -236,8 +236,11 @@ and Server Actions own server-side application behaviour under Path J1.
 
 ## 3.7 Authentication
 
-**Decision:** University SSO through OAuth2/OIDC, followed by application
-identity and role resolution.
+**Decision:** Email and password with server-side password hashing and email
+verification through a short-lived OTP sent by Resend. The application issues
+short-lived JWT access tokens and rotating, revocable refresh tokens in
+HTTP-only cookies. University OIDC is deferred because no university issuer
+configuration is available for this deployment.
 
 Administrative roles shall use TOTP MFA.
 
@@ -251,7 +254,7 @@ These mechanisms are the Track J CES baseline.
 
 ``` text
                          ┌───────────────────────────┐
-                         │      University SSO       │
+                         │ Email + OTP (Resend)      │
                          └─────────────┬─────────────┘
                                        │
                                        │
@@ -787,17 +790,15 @@ shall not create a second mentorship or consume capacity twice.
 ## 12.1 Authentication Flow
 
 ``` text
-User
+Email/password
  ↓
-University SSO
- ↓
-OIDC/OAuth2 authentication
+Verified account (email OTP)
  ↓
 Application identity established
  ↓
 Role resolved
  ↓
-Authenticated application context
+Short-lived JWT + rotating refresh cookie
 ```
 
 Administrative users additionally satisfy the required MFA policy.
